@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>校园地图（H5 样板）</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <!-- 引入高德地图 JS API (需替换为您自己的 KEY) -->
+    <script type="text/javascript">
+      window._AMapSecurityConfig = {
+        securityJsCode: "a8987310aeabfad9de406b9a9dc2c21c", // 填写您的安全密钥
+      };
+    </script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=9551dc2c63c49df184a0033729ea75a5"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="search-wrap" role="search">
+        <span class="search-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+        </span>
+        <input id="searchInput" type="search" placeholder="搜索楼宇 / 教室 / 地点（样式占位）" autocomplete="off" />
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="page is-active" id="page-map" data-page="map" aria-label="地图">
+        <div class="map-stage" aria-label="地图功能区（占满搜索栏与导航栏之间）">
+          <div class="map-placeholder" id="mapContent" aria-label="地图区域">
+            <!-- 高德地图将在此渲染 -->
+          </div>
+          <button id="geoBtn" class="map-ctrl-btn geo-btn" title="我的位置">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="mapMenu" class="map-menu is-hidden" role="menu" aria-label="地图操作菜单">
+          <button id="menuCreate" type="button" class="menu-btn" role="menuitem">新建</button>
+          <button id="menuEdit" type="button" class="menu-btn" role="menuitem">修改</button>
+          <button id="menuDelete" type="button" class="menu-btn menu-btn-danger" role="menuitem">删除</button>
+        </div>
+
+        <div id="formModal" class="overlay is-hidden" aria-hidden="true">
+          <div class="dialog" role="dialog" aria-modal="true" aria-label="地点编辑">
+            <div class="dialog-title" id="dialogTitle">新建地点</div>
+            <form id="pointForm" class="point-form">
+              <label class="field">
+                <span class="field-label">地点名称</span>
+                <input id="pointName" type="text" maxlength="40" placeholder="例如：图书馆南门" required />
+              </label>
+
+              <label class="field">
+                <span class="field-label">地点图标（可导入图片）</span>
+                <input id="pointIconFile" type="file" accept="image/*" />
+              </label>
+
+              <label class="field">
+                <span class="field-label">地点详情</span>
+                <textarea id="pointDesc" rows="4" maxlength="400" placeholder="输入地点介绍、开放时间、注意事项等"></textarea>
+              </label>
+
+              <div class="icon-preview-wrap">
+                <img id="iconPreview" class="icon-preview is-hidden" alt="图标预览" />
+              </div>
+
+              <div class="dialog-actions">
+                <button id="cancelForm" type="button" class="btn btn-light">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="detailView" class="detail-view is-hidden" aria-hidden="true">
+          <div class="detail-header">
+            <button id="backDetail" type="button" class="btn-back">← 返回地图</button>
+          </div>
+          <div class="detail-body">
+            <div class="detail-icon-wrap">
+              <img id="detailIcon" class="detail-icon is-hidden" alt="地点图标" />
+            </div>
+            <h2 id="detailName" class="detail-name">地点名称</h2>
+            <p id="detailDesc" class="detail-desc">暂无详情</p>
+            
+            <div class="detail-photos-section">
+              <h3 class="section-title">实景照片</h3>
+              <div id="detailPhotos" class="photos-grid">
+                <!-- 照片占位 -->
+                <div class="photo-placeholder">暂无实景照片</div>
+              </div>
+            </div>
+
+            <div class="detail-comments-section">
+              <h3 class="section-title">用户评论</h3>
+              <div id="commentsList" class="comments-list">
+                <!-- 评论列表 -->
+                <div class="comment-placeholder">暂无评论</div>
+              </div>
+              <div class="comment-input-wrap">
+                <input id="commentInput" type="text" placeholder="说点什么吧..." />
+                <button id="submitComment" class="btn btn-primary btn-sm">发送</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-memorial" data-page="memorial" aria-label="活动">
+        <div class="blank">空白页占位（活动）</div>
+      </section>
+
+      <section class="page" id="page-discover" data-page="discover" aria-label="发现">
+        <div class="blank">空白页占位（发现）</div>
+      </section>
+
+      <section class="page" id="page-me" data-page="me" aria-label="我的">
+        <div class="blank">空白页占位（我的）</div>
+      </section>
+    </main>
+
+    <footer class="app-footer" aria-label="底部导航">
+      <nav class="tab-bar" role="tablist" aria-label="主导航">
+        <button type="button" class="tab-item is-active" data-tab="map" role="tab" aria-selected="true">
+          <span class="tab-icon" aria-hidden="true">⌖</span>
+          <span class="tab-label">地图</span>
+        </button>
+        <button type="button" class="tab-item" data-tab="memorial" role="tab" aria-selected="false">
+          <span class="tab-icon" aria-hidden="true">★</span>
+          <span class="tab-label">活动</span>
+        </button>
+        <button type="button" class="tab-item" data-tab="discover" role="tab" aria-selected="false">
+          <span class="tab-icon" aria-hidden="true">◎</span>
+          <span class="tab-label">发现</span>
+        </button>
+        <button type="button" class="tab-item" data-tab="me" role="tab" aria-selected="false">
+          <span class="tab-icon" aria-hidden="true">👤</span>
+          <span class="tab-label">我的</span>
+        </button>
+      </nav>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
