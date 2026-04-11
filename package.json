@@ -1,0 +1,12 @@
+{
+  "name": "digital-culture-campus-map",
+  "version": "1.0.0",
+  "description": "校园地图 H5 项目",
+  "main": "app.js",
+  "scripts": {
+    "start": "serve ."
+  },
+  "dependencies": {
+    "@vercel/kv": "^1.0.1"
+  }
+}
