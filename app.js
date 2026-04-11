@@ -228,15 +228,25 @@
       const onlinePoints = await response.json();
       
       if (Array.isArray(onlinePoints)) {
-        // 智能合并：本地新增但云端没有的 ID 会被保留（可选，这里先用覆盖逻辑）
-        points = onlinePoints;
-        savePointsLocal(points);
-        renderPoints();
-        if (!silent) alert('✅ 同步成功：已获取云端最新 ' + onlinePoints.length + ' 个地点');
+        if (onlinePoints.length === 0 && points.length > 0) {
+          // 特殊逻辑：如果云端是空的，但本地有数据（比如测试点或你刚标的点）
+          // 则自动将本地数据推送到云端进行初始化
+          console.log('云端为空，正在初始化云端数据...');
+          await savePointsOnline(points);
+          if (!silent) alert('✅ 云端已初始化：已将本地 ' + points.length + ' 个地点同步至云端');
+        } else if (onlinePoints.length > 0) {
+          // 云端有数据，以云端为准
+          points = onlinePoints;
+          savePointsLocal(points);
+          renderPoints();
+          if (!silent) alert('✅ 同步成功：已获取云端最新 ' + onlinePoints.length + ' 个地点');
+        } else {
+          if (!silent) alert('ℹ️ 云端和本地目前均无数据');
+        }
       }
     } catch (error) {
       console.error('❌ 同步失败:', error);
-      if (!silent) alert('❌ 同ップ失败: ' + error.message);
+      if (!silent) alert('❌ 同步失败: ' + error.message);
     }
   }
 
@@ -274,61 +284,25 @@
   function loadPoints() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        // 提供一些默认的至诚学院地点
-        const defaults = [
-          { 
-            id: 'def-1', 
-            name: '图书馆', 
-            lng: 119.273151, 
-            lat: 26.074554, 
-            desc: '福州大学至诚学院图书馆，环境优美，藏书丰富。',
-            images: [
-              'https://picsum.photos/id/1/400/300',
-              'https://picsum.photos/id/10/400/300',
-              'https://picsum.photos/id/20/400/300'
-            ]
-          },
-          { 
-            id: 'def-2', 
-            name: '北门', 
-            lng: 119.271373, 
-            lat: 26.076872, 
-            desc: '福州大学至诚学院北门，通往福大怡山校区。',
-            images: ['https://picsum.photos/id/11/400/300']
-          },
-          { 
-            id: 'def-3', 
-            name: '西门', 
-            lng: 119.269415, 
-            lat: 26.073551, 
-            desc: '福州大学至诚学院西门，靠近工业路。',
-            images: ['https://picsum.photos/id/12/400/300']
-          },
-          { 
-            id: 'def-4', 
-            name: '体育馆', 
-            lng: 119.272145, 
-            lat: 26.071234, 
-            desc: '体育场馆，设施齐全。',
-            images: ['https://picsum.photos/id/13/400/300']
-          },
-          {
-            id: 'test-sync-1',
-            name: '云端同步测试点',
-            lng: 119.273,
-            lat: 26.073,
-            desc: '如果你在不同设备上看到这个点，说明云端同步已经初步打通。',
-            images: ['https://picsum.photos/id/100/400/300'],
-            comments: [
-              { user: '管理员', text: '这是一个预设的测试评论。', time: Date.now() }
-            ]
-          }
-        ];
-        return defaults;
-      }
+      const defaults = [
+        { id: 'def-1', name: '图书馆', lng: 119.273151, lat: 26.074554, desc: '福州大学至诚学院图书馆，环境优美，藏书丰富。', images: ['https://picsum.photos/id/1/400/300','https://picsum.photos/id/10/400/300','https://picsum.photos/id/20/400/300'] },
+        { id: 'def-2', name: '北门', lng: 119.271373, lat: 26.076872, desc: '福州大学至诚学院北门，通往福大怡山校区。', images: ['https://picsum.photos/id/11/400/300'] },
+        { id: 'def-3', name: '西门', lng: 119.269415, lat: 26.073551, desc: '福州大学至诚学院西门，靠近工业路。', images: ['https://picsum.photos/id/12/400/300'] },
+        { id: 'def-4', name: '体育馆', lng: 119.272145, lat: 26.071234, desc: '体育场馆，设施齐全。', images: ['https://picsum.photos/id/13/400/300'] },
+        { id: 'test-sync-1', name: '云端同步测试点', lng: 119.273, lat: 26.073, desc: '如果你在不同设备上看到这个点，说明云端同步已经初步打通。', images: ['https://picsum.photos/id/100/400/300'], comments: [{ user: '管理员', text: '这是一个预设的测试评论。', time: Date.now() }] }
+      ];
+
+      if (!raw) return defaults;
+      
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
+      if (!Array.isArray(parsed)) return defaults;
+
+      // 强制确保测试点存在于列表中（如果本地数据里没有的话）
+      const hasTestPoint = parsed.some(p => p.id === 'test-sync-1');
+      if (!hasTestPoint) {
+        parsed.push(defaults.find(d => d.id === 'test-sync-1'));
+      }
+
       return parsed.filter((p) => p && typeof p.id === "string");
     } catch {
       return [];
