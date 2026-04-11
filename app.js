@@ -20,6 +20,7 @@
   const detailPhotos = document.getElementById("detailPhotos");
   const commentsList = document.getElementById("commentsList");
   const commentInput = document.getElementById("commentInput");
+  const commentNickname = document.getElementById("commentNickname");
   const submitComment = document.getElementById("submitComment");
   const geoBtn = document.getElementById("geoBtn");
   const searchInput = document.getElementById("searchInput");
@@ -62,6 +63,7 @@
     !detailPhotos ||
     !commentsList ||
     !commentInput ||
+    !commentNickname ||
     !submitComment ||
     !geoBtn ||
     !searchInput ||
@@ -310,6 +312,17 @@
             lat: 26.071234, 
             desc: '体育场馆，设施齐全。',
             images: ['https://picsum.photos/id/13/400/300']
+          },
+          {
+            id: 'test-sync-1',
+            name: '云端同步测试点',
+            lng: 119.273,
+            lat: 26.073,
+            desc: '如果你在不同设备上看到这个点，说明云端同步已经初步打通。',
+            images: ['https://picsum.photos/id/100/400/300'],
+            comments: [
+              { user: '管理员', text: '这是一个预设的测试评论。', time: Date.now() }
+            ]
           }
         ];
         return defaults;
@@ -613,15 +626,17 @@
   const renderComments = (comments) => {
     commentsList.innerHTML = "";
     if (comments.length === 0) {
-      commentsList.innerHTML = '<div class="comment-placeholder">暂无评论</div>';
+      commentsList.innerHTML = '<div class="comment-placeholder">暂无评论数据</div>';
       return;
     }
     comments.forEach(c => {
       const item = document.createElement("div");
       item.className = "comment-item";
+      const timeStr = new Date(c.time).toLocaleString('zh-CN', { hour12: false });
       item.innerHTML = `
-        <div class="comment-user">匿名用户</div>
+        <div class="comment-user">${c.user || "匿名用户"}</div>
         <div class="comment-text">${c.text}</div>
+        <div class="comment-time">${timeStr}</div>
       `;
       commentsList.appendChild(item);
     });
@@ -811,13 +826,18 @@
   // 提交评论
   submitComment.addEventListener("click", () => {
     const text = commentInput.value.trim();
+    const nickname = commentNickname.value.trim() || (currentUser ? currentUser.username : "匿名用户");
     if (!text || !selectedId) return;
 
     const p = getPointById(selectedId);
     if (!p) return;
 
     if (!p.comments) p.comments = [];
-    p.comments.push({ text, time: Date.now() });
+    p.comments.push({ 
+      user: nickname, 
+      text: text, 
+      time: Date.now() 
+    });
     
     savePoints();
     renderComments(p.comments);
