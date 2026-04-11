@@ -253,7 +253,12 @@
   // 保存数据
   async function savePointsOnline(newPoints) {
     points = newPoints;
-    savePointsLocal(points); 
+    // 尝试保存到本地，但如果失败了（空间满）也不要中断流程
+    try {
+      savePointsLocal(points); 
+    } catch (e) {
+      console.warn('本地存储已满，仅同步至云端');
+    }
 
     try {
       const response = await fetch('/api/points', {
@@ -268,13 +273,20 @@
       console.log('✅ 已同步至云端');
     } catch (error) {
       console.error('❌ 无法推送到云端:', error);
-      // alert('数据仅保存在本地。' + error.message);
     }
   }
 
   // 仅保存到本地
   const savePointsLocal = (pts) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(pts));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pts));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        console.error('LocalStorage 空间不足，无法保存本地备份');
+        // 抛出异常让调用者决定是否处理
+        throw e;
+      }
+    }
   };
 
   const savePoints = () => {
