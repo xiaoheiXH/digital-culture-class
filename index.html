@@ -165,13 +165,35 @@
               <span class="me-item-icon">💬</span>
               <span class="me-item-label">我的评论</span>
             </div>
-            <div class="me-item">
+            <div class="me-item" id="openSettings">
               <span class="me-item-icon">⚙️</span>
               <span class="me-item-label">设置</span>
             </div>
           </div>
           <button id="logoutBtn" class="logout-btn">退出登录</button>
           <button id="loginBtnMe" class="login-btn-me is-hidden">去登录 / 管理员登录</button>
+        </div>
+
+        <!-- 设置弹窗 -->
+        <div id="settingsModal" class="overlay is-hidden" aria-hidden="true">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3>系统设置</h3>
+              <button id="closeSettings" class="btn-close">×</button>
+            </div>
+            <div class="dialog-body">
+              <div class="settings-list">
+                <div class="settings-item" id="syncCloud">
+                  <div class="settings-item-info">
+                    <span class="settings-item-title">同步云端数据</span>
+                    <span class="settings-item-desc">手动从服务器获取最新标点数据</span>
+                  </div>
+                  <span class="settings-item-action">☁️</span>
+                </div>
+                <!-- 未来可以增加更多设置项 -->
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>

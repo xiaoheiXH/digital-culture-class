@@ -32,6 +32,10 @@
   const loginBtnMe = document.getElementById("loginBtnMe");
   const meUsername = document.getElementById("meUsername");
   const meRole = document.getElementById("meRole");
+  const syncCloud = document.getElementById("syncCloud");
+  const openSettings = document.getElementById("openSettings");
+  const closeSettings = document.getElementById("closeSettings");
+  const settingsModal = document.getElementById("settingsModal");
   
   const STORAGE_KEY = "campus_map_points_v2";
   const USER_KEY = "campus_map_user";
@@ -69,7 +73,11 @@
     !logoutBtn ||
     !loginBtnMe ||
     !meUsername ||
-    !meRole
+    !meRole ||
+    !syncCloud ||
+    !openSettings ||
+    !closeSettings ||
+    !settingsModal
   ) {
     return;
   }
@@ -140,6 +148,25 @@
     loginError.classList.add("is-hidden");
   };
 
+  // 设置弹窗开关
+  openSettings.addEventListener("click", () => {
+    settingsModal.classList.remove("is-hidden");
+    settingsModal.setAttribute("aria-hidden", "false");
+  });
+
+  const closeSettingsModal = () => {
+    settingsModal.classList.add("is-hidden");
+    settingsModal.setAttribute("aria-hidden", "true");
+  };
+
+  closeSettings.addEventListener("click", closeSettingsModal);
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) closeSettingsModal();
+  });
+
+  // 手动同步
+  syncCloud.addEventListener("click", () => fetchPointsOnline(false));
+
   // 更新“我的”页面信息
   const updateMePage = () => {
     if (currentUser) {
@@ -188,25 +215,33 @@
   const uuid = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 
   // 获取数据
-  async function fetchPointsOnline() {
+  async function fetchPointsOnline(silent = true) {
+    if (!silent) console.log('正在从云端同步数据...');
     try {
       const response = await fetch('/api/points');
-      if (!response.ok) throw new Error('网络异常');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || '云端未响应');
+      }
       const onlinePoints = await response.json();
-      if (Array.isArray(onlinePoints) && onlinePoints.length > 0) {
+      
+      if (Array.isArray(onlinePoints)) {
+        // 智能合并：本地新增但云端没有的 ID 会被保留（可选，这里先用覆盖逻辑）
         points = onlinePoints;
-        savePointsLocal(points); // 同步到本地
+        savePointsLocal(points);
         renderPoints();
+        if (!silent) alert('✅ 同步成功：已获取云端最新 ' + onlinePoints.length + ' 个地点');
       }
     } catch (error) {
-      console.warn('无法从云端同步，使用本地数据:', error);
+      console.error('❌ 同步失败:', error);
+      if (!silent) alert('❌ 同ップ失败: ' + error.message);
     }
   }
 
   // 保存数据
   async function savePointsOnline(newPoints) {
     points = newPoints;
-    savePointsLocal(points); // 先保存到本地
+    savePointsLocal(points); 
 
     try {
       const response = await fetch('/api/points', {
@@ -214,10 +249,14 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPoints)
       });
-      if (!response.ok) throw new Error('保存失败');
-      console.log('数据已同步至云端');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || '保存失败');
+      }
+      console.log('✅ 已同步至云端');
     } catch (error) {
-      console.error('同步至云端失败:', error);
+      console.error('❌ 无法推送到云端:', error);
+      // alert('数据仅保存在本地。' + error.message);
     }
   }
 
