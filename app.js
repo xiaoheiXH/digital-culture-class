@@ -23,8 +23,18 @@
   const submitComment = document.getElementById("submitComment");
   const geoBtn = document.getElementById("geoBtn");
   const searchInput = document.getElementById("searchInput");
+  const searchResults = document.getElementById("searchResults");
+  const loginOverlay = document.getElementById("loginOverlay");
+  const loginForm = document.getElementById("loginForm");
+  const loginError = document.getElementById("loginError");
+  const skipLogin = document.getElementById("skipLogin");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const loginBtnMe = document.getElementById("loginBtnMe");
+  const meUsername = document.getElementById("meUsername");
+  const meRole = document.getElementById("meRole");
   
-  const STORAGE_KEY = "campus_map_points_v2"; // 使用 v2 区分经纬度坐标
+  const STORAGE_KEY = "campus_map_points_v2";
+  const USER_KEY = "campus_map_user";
 
   if (
     !mapContent ||
@@ -50,7 +60,16 @@
     !commentInput ||
     !submitComment ||
     !geoBtn ||
-    !searchInput
+    !searchInput ||
+    !searchResults ||
+    !loginOverlay ||
+    !loginForm ||
+    !loginError ||
+    !skipLogin ||
+    !logoutBtn ||
+    !loginBtnMe ||
+    !meUsername ||
+    !meRole
   ) {
     return;
   }
@@ -59,23 +78,203 @@
   let geolocation = null;
   let menuMode = "create";
   let selectedId = null;
-  let pendingLngLat = null; // 用于存储新建地点的经纬度
+  let pendingLngLat = null;
   let editingId = null;
   let iconDataUrl = "";
+  let currentUser = JSON.parse(localStorage.getItem(USER_KEY)) || null;
   let points = loadPoints();
-  let markers = []; // 存储 AMap.Marker 实例
-  let longPressTimer = null; // 长按定时器
+  
+  // 建筑数据（占位，后续可改为从服务器获取或管理员配置）
+  const buildings = [
+    { id: 'b-1', name: '教学楼 A', type: 'building', desc: '主要教学场所，内有大型阶梯教室。', lng: 119.271, lat: 26.075 },
+    { id: 'b-2', name: '学生公寓 1 号楼', type: 'building', desc: '学生宿舍区。', lng: 119.275, lat: 26.073 },
+    { id: 'b-3', name: '行政楼', type: 'building', desc: '学校办公行政中心。', lng: 119.272, lat: 26.076 },
+    { id: 'b-4', name: '校医院', type: 'building', desc: '提供医疗保障服务。', lng: 119.274, lat: 26.074 },
+  ];
+
+  let markers = [];
+  let longPressTimer = null;
+
+  // 登录逻辑
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const username = e.target.username.value;
+    const password = e.target.password.value;
+
+    // 管理员账号校验
+    if (username === "bonvoyage" && password === "pathbeclear") {
+      currentUser = { username, role: "admin" };
+    } else if (username && password) {
+      // 普通用户登录
+      currentUser = { username, role: "user" };
+    } else {
+      loginError.classList.remove("is-hidden");
+      return;
+    }
+
+    localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+    updateMePage();
+    loginOverlay.classList.add("is-hidden");
+    initApp();
+  };
+
+  // 登出逻辑
+  const handleLogout = () => {
+    localStorage.removeItem(USER_KEY);
+    currentUser = null;
+    location.reload(); 
+  };
+
+  // 匿名访问
+  const handleSkipLogin = () => {
+    currentUser = { username: "匿名访客", role: "guest" };
+    // 不保存到本地存储，刷新后需重新选择或登录
+    updateMePage();
+    loginOverlay.classList.add("is-hidden");
+    initApp();
+  };
+
+  // 从“我的”页面去登录
+  const goToLogin = () => {
+    loginOverlay.classList.remove("is-hidden");
+    loginError.classList.add("is-hidden");
+  };
+
+  // 更新“我的”页面信息
+  const updateMePage = () => {
+    if (currentUser) {
+      meUsername.textContent = currentUser.username;
+      const roleText = {
+        'admin': '管理员',
+        'user': '注册用户',
+        'guest': '匿名访客'
+      }[currentUser.role] || '未知';
+      meRole.textContent = `角色：${roleText}`;
+      
+      // 控制退出/登录按钮显示
+      if (currentUser.role === 'guest') {
+        logoutBtn.classList.add("is-hidden");
+        loginBtnMe.classList.remove("is-hidden");
+      } else {
+        logoutBtn.classList.remove("is-hidden");
+        loginBtnMe.classList.add("is-hidden");
+      }
+    }
+  };
+
+  loginForm.addEventListener("submit", handleLogin);
+  skipLogin.addEventListener("click", handleSkipLogin);
+  logoutBtn.addEventListener("click", handleLogout);
+  loginBtnMe.addEventListener("click", goToLogin);
+
+  // 初始化应用
+  const initApp = () => {
+    // 匿名或已登录用户都可进入
+    if (!currentUser) {
+      // 默认不强制弹出登录，或者根据需求决定是否弹出
+      // 如果希望一开始就让用户选，则保持 loginOverlay 开启
+      return; 
+    }
+    updateMePage();
+    loginOverlay.classList.add("is-hidden");
+    if (window.AMap) {
+      initMap();
+    } else {
+      window.onload = initMap;
+    }
+    fetchPointsOnline(); // [新增] 初始化时从云端同步数据
+  };
 
   const uuid = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 
+  // 获取数据
+  async function fetchPointsOnline() {
+    try {
+      const response = await fetch('/api/points');
+      if (!response.ok) throw new Error('网络异常');
+      const onlinePoints = await response.json();
+      if (Array.isArray(onlinePoints) && onlinePoints.length > 0) {
+        points = onlinePoints;
+        savePointsLocal(points); // 同步到本地
+        renderPoints();
+      }
+    } catch (error) {
+      console.warn('无法从云端同步，使用本地数据:', error);
+    }
+  }
+
+  // 保存数据
+  async function savePointsOnline(newPoints) {
+    points = newPoints;
+    savePointsLocal(points); // 先保存到本地
+
+    try {
+      const response = await fetch('/api/points', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPoints)
+      });
+      if (!response.ok) throw new Error('保存失败');
+      console.log('数据已同步至云端');
+    } catch (error) {
+      console.error('同步至云端失败:', error);
+    }
+  }
+
+  // 仅保存到本地
+  const savePointsLocal = (pts) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pts));
+  };
+
   const savePoints = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(points));
+    savePointsOnline(points);
   };
 
   function loadPoints() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
+      if (!raw) {
+        // 提供一些默认的至诚学院地点
+        const defaults = [
+          { 
+            id: 'def-1', 
+            name: '图书馆', 
+            lng: 119.273151, 
+            lat: 26.074554, 
+            desc: '福州大学至诚学院图书馆，环境优美，藏书丰富。',
+            images: [
+              'https://picsum.photos/id/1/400/300',
+              'https://picsum.photos/id/10/400/300',
+              'https://picsum.photos/id/20/400/300'
+            ]
+          },
+          { 
+            id: 'def-2', 
+            name: '北门', 
+            lng: 119.271373, 
+            lat: 26.076872, 
+            desc: '福州大学至诚学院北门，通往福大怡山校区。',
+            images: ['https://picsum.photos/id/11/400/300']
+          },
+          { 
+            id: 'def-3', 
+            name: '西门', 
+            lng: 119.269415, 
+            lat: 26.073551, 
+            desc: '福州大学至诚学院西门，靠近工业路。',
+            images: ['https://picsum.photos/id/12/400/300']
+          },
+          { 
+            id: 'def-4', 
+            name: '体育馆', 
+            lng: 119.272145, 
+            lat: 26.071234, 
+            desc: '体育场馆，设施齐全。',
+            images: ['https://picsum.photos/id/13/400/300']
+          }
+        ];
+        return defaults;
+      }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
       return parsed.filter((p) => p && typeof p.id === "string");
@@ -168,16 +367,60 @@
     });
 
     /** 
-     * [提示] 如果您有校园手绘地图图片，可以使用以下代码叠加：
-     * 
-     * var imageLayer = new AMap.ImageLayer({
-     *   url: './your-hand-drawn-map.png', // 图片 URL
-     *   bounds: new AMap.Bounds([116.327, 39.938], [116.520, 39.996]), // 图片覆盖的地理范围 [西南角, 东北角]
-     *   zooms: [15, 20] // 显示层级范围
-     * });
-     * map.add(imageLayer);
+     * 1. 叠加校园建筑描绘图 (GroundImage/ImageLayer)
+     * 将您的手绘图或建筑描绘图放置在 ./assets/campus-map.png (示例路径)
      */
+    const campusImageLayer = new AMap.ImageLayer({
+      url: 'https://a.amap.com/jsapi_demos/static/demo-center/bg/map_shanghai.png', // 示例图
+      bounds: new AMap.Bounds(
+        [119.268000, 26.068000], // 西南角
+        [119.278000, 26.078000]  // 东北角
+      ),
+      zooms: [15, 20],
+      opacity: 0, // [修改] 暂时设为 0（透明），等您准备好图片后再调回 0.85 左右
+      visible: false // [修改] 也可以直接设为不可见，功能代码依然保留
+    });
+    map.add(campusImageLayer);
 
+    /**
+     * 2. 绘制建筑轮廓 (Polygon)
+     * 即使图片透明，轮廓依然可以存在，您可以用来测试“点击建筑弹出详情”的功能
+     */
+    const renderBuildingOutlines = () => {
+      // 示例：图书馆轮廓 (Polygon)
+      const libraryPath = [
+        [119.272500, 26.074000],
+        [119.273800, 26.074000],
+        [119.273800, 26.075000],
+        [119.272500, 26.075000]
+      ];
+
+      const polygon = new AMap.Polygon({
+        path: libraryPath,
+        fillColor: '#00b2ff',
+        fillOpacity: 0.1,     // [修改] 调低填充透明度，让它不遮挡底层地图
+        strokeColor: '#00b2ff',
+        strokeWeight: 1,      // [修改] 调细边框
+        strokeStyle: 'dashed', // [修改] 使用虚线，表示这只是一个逻辑区域
+        extData: { id: 'def-1' }
+      });
+
+      polygon.on('click', (e) => {
+        openDetail('def-1');
+      });
+
+      // 鼠标移入效果
+      polygon.on('mouseover', () => {
+        polygon.setOptions({ fillOpacity: 0.5 });
+      });
+      polygon.on('mouseout', () => {
+        polygon.setOptions({ fillOpacity: 0.2 });
+      });
+
+      map.add(polygon);
+    };
+
+    renderBuildingOutlines();
     renderPoints();
   };
 
@@ -235,6 +478,12 @@
   };
 
   const showMenu = (clientX, clientY, mode, markerId = null) => {
+    // 如果是 marker 模式（编辑/删除），只有管理员可以操作
+    if (mode === "marker" && currentUser?.role !== "admin") return;
+    
+    // 如果是 create 模式，所有人（包括匿名访客）都可以操作
+    if (mode === "create" && !currentUser) return; // 理论上 initApp 会处理 currentUser
+
     menuMode = mode;
     selectedId = markerId;
 
@@ -258,6 +507,9 @@
   };
 
   const openForm = (type, point = null) => {
+    // 只有管理员可以编辑，但所有人可以新建
+    if (type === "edit" && currentUser?.role !== "admin") return;
+    
     editingId = point ? point.id : null;
     dialogTitle.textContent = type === "edit" ? "修改地点" : "新建地点";
     resetForm();
@@ -285,17 +537,17 @@
     detailName.textContent = p.name || "未命名地点";
     detailDesc.textContent = p.desc || "暂无详情";
     
-    // 渲染实景照片 (目前先放图标作为唯一照片演示)
+    // 渲染实景照片列表
     detailPhotos.innerHTML = "";
-    if (p.icon) {
-      const img = document.createElement("img");
-      img.src = p.icon;
-      img.className = "photo-item"; // 可以在 css 补样式
-      img.style.width = "100%";
-      img.style.height = "80px";
-      img.style.objectFit = "cover";
-      img.style.borderRadius = "4px";
-      detailPhotos.appendChild(img);
+    const imagesToShow = p.images || (p.icon ? [p.icon] : []);
+    
+    if (imagesToShow.length > 0) {
+      imagesToShow.forEach(imgSrc => {
+        const img = document.createElement("img");
+        img.src = imgSrc;
+        img.className = "photo-item";
+        detailPhotos.appendChild(img);
+      });
     } else {
       detailPhotos.innerHTML = '<div class="photo-placeholder">暂无实景照片</div>';
     }
@@ -434,6 +686,87 @@
   searchInput.addEventListener("input", (e) => {
     const text = e.target.value.trim();
     renderPoints(text);
+    renderSearchResults(text);
+  });
+
+  // 渲染搜索结果列表
+  const renderSearchResults = (text) => {
+    if (!text) {
+      searchResults.classList.add("is-hidden");
+      searchResults.innerHTML = "";
+      return;
+    }
+
+    // 同时搜索地点和建筑
+    const pointMatches = points.filter(p => 
+      p.name.toLowerCase().includes(text.toLowerCase()) || 
+      (p.desc && p.desc.toLowerCase().includes(text.toLowerCase()))
+    ).map(p => ({ ...p, resultType: 'point' }));
+
+    const buildingMatches = buildings.filter(b => 
+      b.name.toLowerCase().includes(text.toLowerCase()) || 
+      (b.desc && b.desc.toLowerCase().includes(text.toLowerCase()))
+    ).map(b => ({ ...b, resultType: 'building' }));
+
+    const allMatches = [...pointMatches, ...buildingMatches];
+
+    if (allMatches.length === 0) {
+      searchResults.innerHTML = '<div class="search-no-result">未找到相关地点或建筑</div>';
+    } else {
+      searchResults.innerHTML = allMatches.map(item => `
+        <div class="search-item" data-id="${item.id}" data-type="${item.resultType}">
+          <div class="search-item-icon">
+            ${item.resultType === 'building' ? '🏢' : (item.icon ? `<img src="${item.icon}" style="width:24px;height:24px;border-radius:4px;">` : '📍')}
+          </div>
+          <div class="search-item-info">
+            <div class="search-item-name">
+              ${item.name} 
+              <span class="search-item-tag ${item.resultType === 'building' ? 'tag-building' : 'tag-point'}">
+                ${item.resultType === 'building' ? '建筑' : '地点'}
+              </span>
+            </div>
+            <div class="search-item-desc">${item.desc || '暂无描述'}</div>
+          </div>
+        </div>
+      `).join('');
+
+      // 给搜索项添加点击事件
+      searchResults.querySelectorAll(".search-item").forEach(el => {
+        el.addEventListener("click", () => {
+          const id = el.getAttribute("data-id");
+          const type = el.getAttribute("data-type");
+          
+          let item = null;
+          if (type === 'point') {
+            item = getPointById(id);
+          } else {
+            item = buildings.find(b => b.id === id);
+          }
+
+          if (item && map) {
+            map.setCenter([item.lng, item.lat]);
+            map.setZoom(18);
+            if (type === 'point') {
+              openDetail(id);
+            } else {
+              // 如果是建筑，暂时也弹一个模拟信息
+              alert(`您点击了建筑：${item.name}\n${item.desc}\n(建筑详细图层待管理员实装)`);
+            }
+            searchResults.classList.add("is-hidden");
+            searchInput.value = item.name;
+          }
+        });
+      });
+    }
+
+    searchResults.classList.remove("is-hidden");
+  };
+
+  // 点击页面其他地方关闭搜索结果
+  document.addEventListener("click", (e) => {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+      searchResults.classList.add("is-hidden");
+    }
   });
 
   // 提交评论
@@ -453,12 +786,7 @@
   });
 
   // 初始化
-  if (window.AMap) {
-    initMap();
-  } else {
-    // 如果 AMap 还没加载完，等待加载
-    window.onload = initMap;
-  }
+  initApp();
 })();
 
 (() => {
