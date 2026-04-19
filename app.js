@@ -17,6 +17,8 @@
   const detailDesc = document.getElementById("detailDesc");
   const detailIcon = document.getElementById("detailIcon");
   const backDetail = document.getElementById("backDetail");
+  const btnLike = document.getElementById("btnLike");
+  const likeCount = document.getElementById("likeCount");
   const detailPhotos = document.getElementById("detailPhotos");
   const commentsList = document.getElementById("commentsList");
   const commentInput = document.getElementById("commentInput");
@@ -37,9 +39,30 @@
   const openSettings = document.getElementById("openSettings");
   const closeSettings = document.getElementById("closeSettings");
   const settingsModal = document.getElementById("settingsModal");
+  const imageViewer = document.getElementById("imageViewer");
+  const viewerImage = document.getElementById("viewerImage");
+  const closeImageViewer = document.getElementById("closeImageViewer");
+
+  // 新增 DOM
+  const tabLogin = document.getElementById("tabLogin");
+  const tabRegister = document.getElementById("tabRegister");
+  const authSubmitBtn = document.getElementById("authSubmitBtn");
+  const btnFavorite = document.getElementById("btnFavorite");
+  const btnShare = document.getElementById("btnShare");
+  const openFavorites = document.getElementById("openFavorites");
+  const openMyComments = document.getElementById("openMyComments");
+  const openFriends = document.getElementById("openFriends");
+  const genericListModal = document.getElementById("genericListModal");
+  const genericListTitle = document.getElementById("genericListTitle");
+  const closeGenericList = document.getElementById("closeGenericList");
+  const genericListContainer = document.getElementById("genericListContainer");
+  const addFriendArea = document.getElementById("addFriendArea");
+  const friendNameInput = document.getElementById("friendNameInput");
+  const addFriendBtn = document.getElementById("addFriendBtn");
   
   const STORAGE_KEY = "campus_map_points_v2";
   const USER_KEY = "campus_map_user";
+  const USERS_DB_KEY = "campus_map_users_db"; // 本地用户数据库
 
   if (
     !mapContent ||
@@ -60,6 +83,8 @@
     !detailDesc ||
     !detailIcon ||
     !backDetail ||
+    !btnLike ||
+    !likeCount ||
     !detailPhotos ||
     !commentsList ||
     !commentInput ||
@@ -79,7 +104,10 @@
     !syncCloud ||
     !openSettings ||
     !closeSettings ||
-    !settingsModal
+    !settingsModal ||
+    !imageViewer ||
+    !viewerImage ||
+    !closeImageViewer
   ) {
     return;
   }
@@ -92,6 +120,7 @@
   let editingId = null;
   let iconDataUrl = "";
   let currentUser = JSON.parse(localStorage.getItem(USER_KEY)) || null;
+  let usersDB = JSON.parse(localStorage.getItem(USERS_DB_KEY)) || [{username: 'bonvoyage', password: 'pathbeclear', role: 'admin', favorites: [], friends: []}];
   let points = loadPoints();
   
   // 建筑数据（占位，后续可改为从服务器获取或管理员配置）
@@ -104,28 +133,84 @@
 
   let markers = [];
   let longPressTimer = null;
+  let isLoginMode = true;
 
-  // 登录逻辑
+  // 保存用户数据库
+  const saveUsersDB = () => {
+    localStorage.setItem(USERS_DB_KEY, JSON.stringify(usersDB));
+  };
+
+  // 同步当前用户最新状态
+  const syncCurrentUser = () => {
+    if (currentUser && currentUser.role !== 'guest') {
+      const userInDb = usersDB.find(u => u.username === currentUser.username);
+      if (userInDb) {
+        currentUser = { ...userInDb };
+        localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+      }
+    }
+  };
+
+  // 登录/注册模式切换
+  const setAuthMode = (isLogin) => {
+    isLoginMode = isLogin;
+    if (isLogin) {
+      tabLogin.classList.add("active");
+      tabRegister.classList.remove("active");
+      authSubmitBtn.textContent = "进入系统";
+      document.getElementById("loginSubtitle").textContent = "请登录以开始您的探索之旅";
+      document.getElementById("loginFooterText").textContent = "直接注册，拥有专属账号";
+    } else {
+      tabRegister.classList.add("active");
+      tabLogin.classList.remove("active");
+      authSubmitBtn.textContent = "立即注册";
+      document.getElementById("loginSubtitle").textContent = "创建账号以体验完整功能";
+      document.getElementById("loginFooterText").textContent = "已有账号？直接登录";
+    }
+    loginError.classList.add("is-hidden");
+  };
+
+  if (tabLogin && tabRegister) {
+    tabLogin.addEventListener("click", () => setAuthMode(true));
+    tabRegister.addEventListener("click", () => setAuthMode(false));
+  }
+
+  // 登录/注册逻辑
   const handleLogin = (e) => {
     e.preventDefault();
-    const username = e.target.username.value;
+    const username = e.target.username.value.trim();
     const password = e.target.password.value;
 
-    // 管理员账号校验
-    if (username === "bonvoyage" && password === "pathbeclear") {
-      currentUser = { username, role: "admin" };
-    } else if (username && password) {
-      // 普通用户登录
-      currentUser = { username, role: "user" };
+    if (isLoginMode) {
+      // 登录
+      const user = usersDB.find(u => u.username === username && u.password === password);
+      if (user) {
+        currentUser = { ...user };
+        localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+        updateMePage();
+        loginOverlay.classList.add("is-hidden");
+        initApp();
+      } else {
+        loginError.textContent = "账号或密码错误，请重试";
+        loginError.classList.remove("is-hidden");
+      }
     } else {
-      loginError.classList.remove("is-hidden");
-      return;
+      // 注册
+      const exists = usersDB.find(u => u.username === username);
+      if (exists) {
+        loginError.textContent = "该账号名已存在，请换一个";
+        loginError.classList.remove("is-hidden");
+      } else {
+        const newUser = { username, password, role: "user", favorites: [], friends: [] };
+        usersDB.push(newUser);
+        saveUsersDB();
+        currentUser = { ...newUser };
+        localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+        updateMePage();
+        loginOverlay.classList.add("is-hidden");
+        initApp();
+      }
     }
-
-    localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
-    updateMePage();
-    loginOverlay.classList.add("is-hidden");
-    initApp();
   };
 
   // 登出逻辑
@@ -137,7 +222,7 @@
 
   // 匿名访问
   const handleSkipLogin = () => {
-    currentUser = { username: "匿名访客", role: "guest" };
+    currentUser = { username: "匿名访客", role: "guest", favorites: [], friends: [] };
     // 不保存到本地存储，刷新后需重新选择或登录
     updateMePage();
     loginOverlay.classList.add("is-hidden");
@@ -200,10 +285,14 @@
   const initApp = () => {
     // 匿名或已登录用户都可进入
     if (!currentUser) {
-      // 默认不强制弹出登录，或者根据需求决定是否弹出
-      // 如果希望一开始就让用户选，则保持 loginOverlay 开启
       return; 
     }
+    
+    // 兼容旧数据
+    if (!currentUser.favorites) currentUser.favorites = [];
+    if (!currentUser.friends) currentUser.friends = [];
+    
+    syncCurrentUser(); // 确保加载最新本地数据库中的信息
     updateMePage();
     loginOverlay.classList.add("is-hidden");
     if (window.AMap) {
@@ -478,7 +567,7 @@
       
       const iconNode = p.icon
         ? `<img class="map-marker-icon" src="${p.icon}" alt="${p.name}" />`
-        : `<span class="map-marker-fallback">📍</span>`;
+        : `<img class="map-marker-fallback" src="./svg/marker.svg" alt="Marker" />`;
       
       markerContent.innerHTML = `
         ${iconNode}
@@ -569,12 +658,41 @@
     formModal.setAttribute("aria-hidden", "true");
   };
 
+  // 图片查看器逻辑
+  const openImageViewer = (src) => {
+    if (!src) return;
+    viewerImage.src = src;
+    imageViewer.classList.remove("is-hidden");
+    imageViewer.setAttribute("aria-hidden", "false");
+  };
+
+  const closeImageViewerModal = () => {
+    imageViewer.classList.add("is-hidden");
+    imageViewer.setAttribute("aria-hidden", "true");
+    viewerImage.src = "";
+  };
+
+  closeImageViewer.addEventListener("click", closeImageViewerModal);
+  imageViewer.addEventListener("click", (e) => {
+    if (e.target === imageViewer) closeImageViewerModal();
+  });
+
+  // 渲染并打开详情页
   const openDetail = (id) => {
     const p = getPointById(id);
     if (!p) return;
+    
+    selectedId = id; // 保存当前选中的点，给收藏、转发用
+    
     detailName.textContent = p.name || "未命名地点";
     detailDesc.textContent = p.desc || "暂无详情";
     
+    // 更新收藏按钮状态
+    updateFavoriteBtnState(id);
+    
+    // 更新点赞状态
+    updateLikeBtnState(p);
+
     // 渲染实景照片列表
     detailPhotos.innerHTML = "";
     const imagesToShow = p.images || (p.icon ? [p.icon] : []);
@@ -584,6 +702,8 @@
         const img = document.createElement("img");
         img.src = imgSrc;
         img.className = "photo-item";
+        img.style.cursor = "pointer";
+        img.addEventListener("click", () => openImageViewer(imgSrc));
         detailPhotos.appendChild(img);
       });
     } else {
@@ -596,13 +716,166 @@
     if (p.icon) {
       detailIcon.src = p.icon;
       detailIcon.classList.remove("is-hidden");
+      detailIcon.style.cursor = "pointer";
+      // 点击图标全屏查看
+      detailIcon.onclick = () => openImageViewer(p.icon);
     } else {
       detailIcon.classList.add("is-hidden");
       detailIcon.removeAttribute("src");
+      detailIcon.onclick = null;
     }
     detailView.classList.remove("is-hidden");
     detailView.setAttribute("aria-hidden", "false");
   };
+
+  // 收藏状态更新
+  const updateFavoriteBtnState = (id) => {
+    if (!currentUser || !currentUser.favorites) return;
+    if (currentUser.favorites.includes(id)) {
+      btnFavorite.classList.add("is-favorited");
+      btnFavorite.title = "取消收藏";
+    } else {
+      btnFavorite.classList.remove("is-favorited");
+      btnFavorite.title = "收藏";
+    }
+  };
+
+  // 获取当前用户的唯一标识（注册用户用username，匿名用户用一个固定的或本地存储的临时ID）
+  const getGuestId = () => {
+    let guestId = localStorage.getItem("guest_id");
+    if (!guestId) {
+      guestId = "guest_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+      localStorage.setItem("guest_id", guestId);
+    }
+    return guestId;
+  };
+
+  const getCurrentUserId = () => {
+    if (currentUser && currentUser.role !== 'guest') {
+      return currentUser.username;
+    }
+    return getGuestId();
+  };
+
+  // 点赞状态更新
+  const updateLikeBtnState = (p) => {
+    const likes = p.likes || [];
+    likeCount.textContent = likes.length;
+    
+    const uid = getCurrentUserId();
+    if (likes.includes(uid)) {
+      btnLike.classList.add("is-liked");
+      btnLike.querySelector(".like-text").textContent = "已赞";
+    } else {
+      btnLike.classList.remove("is-liked");
+      btnLike.querySelector(".like-text").textContent = "点赞";
+    }
+  };
+
+  // 点赞操作
+  btnLike.addEventListener("click", () => {
+    if (!selectedId) return;
+    const p = getPointById(selectedId);
+    if (!p) return;
+
+    if (!p.likes) p.likes = [];
+    const uid = getCurrentUserId();
+    const idx = p.likes.indexOf(uid);
+
+    if (idx > -1) {
+      // 已经点赞，取消点赞
+      p.likes.splice(idx, 1);
+    } else {
+      // 未点赞，添加点赞
+      p.likes.push(uid);
+    }
+    
+    savePoints();
+    updateLikeBtnState(p);
+  });
+
+  // 收藏操作
+  btnFavorite.addEventListener("click", () => {
+    if (!currentUser || currentUser.role === 'guest') {
+      alert("收藏功能需要登录专属账号哦");
+      return;
+    }
+    if (!selectedId) return;
+
+    if (!currentUser.favorites) currentUser.favorites = [];
+    const idx = currentUser.favorites.indexOf(selectedId);
+    if (idx > -1) {
+      currentUser.favorites.splice(idx, 1);
+    } else {
+      currentUser.favorites.push(selectedId);
+    }
+    
+    // 更新本地数据库
+    const userInDb = usersDB.find(u => u.username === currentUser.username);
+    if (userInDb) {
+      userInDb.favorites = currentUser.favorites;
+      saveUsersDB();
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+    updateFavoriteBtnState(selectedId);
+  });
+
+  // 分享/转发操作
+  btnShare.addEventListener("click", () => {
+    if (!selectedId) return;
+    const p = getPointById(selectedId);
+    if (!p) return;
+
+    // 获取当前好友列表，弹窗选择好友
+    if (!currentUser || currentUser.role === 'guest' || !currentUser.friends || currentUser.friends.length === 0) {
+      // 如果没有好友或未登录，直接生成复制链接
+      const shareText = `快来看看这个校园地点：${p.name}\n链接: https://digital-culture-class.vercel.app/?point=${selectedId}`;
+      navigator.clipboard.writeText(shareText).then(() => {
+        alert("🔗 链接已复制，去发给朋友吧！");
+      }).catch(() => {
+        alert("转发链接：" + shareText);
+      });
+      return;
+    }
+
+    // 如果有好友，渲染好友列表供选择
+    genericListTitle.textContent = `转发：${p.name}`;
+    addFriendArea.classList.add("is-hidden"); // 隐藏添加好友框
+    
+    genericListContainer.innerHTML = currentUser.friends.map(friend => `
+      <div class="generic-item forward-friend-item" data-friend="${friend}">
+        <div class="generic-item-content">
+          <div class="generic-item-title">${friend}</div>
+        </div>
+        <button class="btn-forward">发送</button>
+      </div>
+    `).join('');
+
+    genericListContainer.querySelectorAll(".forward-friend-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const f = el.getAttribute("data-friend");
+        alert(`✅ 已成功将「${p.name}」转发给好友：${f}`);
+        closeGenericListModal();
+      });
+    });
+
+    openGenericListModal();
+  });
+
+  const closeGenericListModal = () => {
+    genericListModal.classList.add("is-hidden");
+    genericListModal.setAttribute("aria-hidden", "true");
+  };
+
+  const openGenericListModal = () => {
+    genericListModal.classList.remove("is-hidden");
+    genericListModal.setAttribute("aria-hidden", "false");
+  };
+
+  closeGenericList.addEventListener("click", closeGenericListModal);
+  genericListModal.addEventListener("click", (e) => {
+    if (e.target === genericListModal) closeGenericListModal();
+  });
 
   const closeDetail = () => {
     detailView.classList.add("is-hidden");
@@ -812,7 +1085,13 @@
   // 提交评论
   submitComment.addEventListener("click", () => {
     const text = commentInput.value.trim();
-    const nickname = commentNickname.value.trim() || (currentUser ? currentUser.username : "匿名用户");
+    let nickname;
+    if (!currentUser || currentUser.role === 'guest') {
+      nickname = "匿名用户";
+    } else {
+      nickname = currentUser.username;
+    }
+
     if (!text || !selectedId) return;
 
     const p = getPointById(selectedId);
@@ -828,6 +1107,139 @@
     savePoints();
     renderComments(p.comments);
     commentInput.value = "";
+  });
+
+  // --- 个人中心子功能模块 ---
+
+  // 渲染通用列表项
+  const renderGenericList = (items, emptyText, onClickCallback) => {
+    if (!items || items.length === 0) {
+      genericListContainer.innerHTML = `<div class="comment-placeholder">${emptyText}</div>`;
+      return;
+    }
+    
+    genericListContainer.innerHTML = items.map((item, idx) => `
+      <div class="generic-item" data-idx="${idx}">
+        <div class="generic-item-content">
+          <div class="generic-item-title">${item.title}</div>
+          <div class="generic-item-desc">${item.desc}</div>
+        </div>
+      </div>
+    `).join('');
+
+    genericListContainer.querySelectorAll('.generic-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = el.getAttribute('data-idx');
+        onClickCallback(items[idx]);
+      });
+    });
+  };
+
+  // 我的收藏
+  openFavorites.addEventListener("click", () => {
+    if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
+    genericListTitle.textContent = "我的收藏";
+    addFriendArea.classList.add("is-hidden");
+    
+    const favPoints = (currentUser.favorites || []).map(id => getPointById(id)).filter(Boolean);
+    const items = favPoints.map(p => ({
+      title: p.name,
+      desc: p.desc || '暂无描述',
+      id: p.id
+    }));
+
+    renderGenericList(items, "暂无收藏的标点", (item) => {
+      closeGenericListModal();
+      document.querySelector('[data-tab="map"]').click();
+      const p = getPointById(item.id);
+      if (p && map) {
+        map.setCenter([p.lng, p.lat]);
+        map.setZoom(18);
+        openDetail(item.id);
+      }
+    });
+    openGenericListModal();
+  });
+
+  // 我的评论
+  openMyComments.addEventListener("click", () => {
+    if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
+    genericListTitle.textContent = "我的评论";
+    addFriendArea.classList.add("is-hidden");
+
+    let myComments = [];
+    points.forEach(p => {
+      if (p.comments) {
+        p.comments.forEach(c => {
+          if (c.user === currentUser.username) {
+            myComments.push({
+              title: p.name,
+              desc: `我说：${c.text}`,
+              id: p.id
+            });
+          }
+        });
+      }
+    });
+
+    renderGenericList(myComments, "暂无发表过的评论", (item) => {
+      closeGenericListModal();
+      document.querySelector('[data-tab="map"]').click();
+      const p = getPointById(item.id);
+      if (p && map) {
+        map.setCenter([p.lng, p.lat]);
+        map.setZoom(18);
+        openDetail(item.id);
+      }
+    });
+    openGenericListModal();
+  });
+
+  // 我的好友
+  openFriends.addEventListener("click", () => {
+    if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
+    genericListTitle.textContent = "我的好友";
+    addFriendArea.classList.remove("is-hidden"); // 显示添加好友区域
+    friendNameInput.value = "";
+
+    const renderFriends = () => {
+      const friends = currentUser.friends || [];
+      const items = friends.map(f => ({
+        title: f,
+        desc: "已添加的好友"
+      }));
+      renderGenericList(items, "暂无好友，在下方输入账号名添加吧", (item) => {
+        // 点击好友可查看其主页，暂只弹窗
+        alert(`这是你的好友：${item.title}`);
+      });
+    };
+
+    renderFriends();
+    openGenericListModal();
+
+    // 添加好友事件只绑定一次（使用覆盖或解绑防止重复）
+    addFriendBtn.onclick = () => {
+      const friendName = friendNameInput.value.trim();
+      if (!friendName) return;
+      if (friendName === currentUser.username) return alert("不能添加自己为好友");
+      
+      const friendExists = usersDB.find(u => u.username === friendName);
+      if (!friendExists) return alert("该用户不存在");
+
+      if (!currentUser.friends) currentUser.friends = [];
+      if (currentUser.friends.includes(friendName)) return alert("已经是好友了");
+
+      currentUser.friends.push(friendName);
+      const userInDb = usersDB.find(u => u.username === currentUser.username);
+      if (userInDb) {
+        userInDb.friends = currentUser.friends;
+        saveUsersDB();
+      }
+      localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+      friendNameInput.value = "";
+      alert(`✅ 成功添加好友：${friendName}`);
+      renderFriends();
+    };
   });
 
   // 初始化

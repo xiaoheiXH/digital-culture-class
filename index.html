@@ -20,7 +20,11 @@
         <div class="login-header">
           <img src="https://via.placeholder.com/60" alt="Logo" class="login-logo" />
           <h2>校园导览系统</h2>
-          <p>请登录以开始您的探索之旅</p>
+          <div class="login-tabs">
+            <button type="button" id="tabLogin" class="login-tab active">登录</button>
+            <button type="button" id="tabRegister" class="login-tab">注册</button>
+          </div>
+          <p id="loginSubtitle">请登录以开始您的探索之旅</p>
         </div>
         <form id="loginForm" class="login-form">
           <div class="form-group">
@@ -31,12 +35,12 @@
             <label for="password">密码</label>
             <input type="password" id="password" placeholder="请输入您的密码" required autocomplete="current-password" />
           </div>
-          <button type="submit" class="login-btn">进入系统</button>
+          <button type="submit" id="authSubmitBtn" class="login-btn">进入系统</button>
           <button type="button" id="skipLogin" class="skip-btn">先随便看看 (匿名使用)</button>
           <p id="loginError" class="login-error is-hidden">账号或密码错误，请重试</p>
         </form>
         <div class="login-footer">
-          <p>初次使用？请联系管理员开通</p>
+          <p id="loginFooterText">直接注册，拥有专属账号</p>
         </div>
       </div>
     </div>
@@ -108,6 +112,14 @@
         <div id="detailView" class="detail-view is-hidden" aria-hidden="true">
           <div class="detail-header">
             <button id="backDetail" type="button" class="btn-back">← 返回地图</button>
+            <div class="detail-actions">
+              <button id="btnFavorite" class="btn-icon" title="收藏">
+                <img src="./svg/favorites.svg" alt="收藏" width="20" height="20" />
+              </button>
+              <button id="btnShare" class="btn-icon" title="转发/分享">
+                <img src="./svg/messages.svg" alt="转发" width="20" height="20" />
+              </button>
+            </div>
           </div>
           <div class="detail-body">
             <div class="detail-icon-wrap">
@@ -116,6 +128,12 @@
             <h2 id="detailName" class="detail-name">地点名称</h2>
             <p id="detailDesc" class="detail-desc">暂无详情</p>
             
+            <div class="detail-like-wrap">
+              <button id="btnLike" class="btn-like">
+                <span class="like-icon">👍</span> <span class="like-text">点赞</span> <span id="likeCount">0</span>
+              </button>
+            </div>
+
             <div class="detail-photos-section">
               <h3 class="section-title">实景照片</h3>
               <div id="detailPhotos" class="photos-grid">
@@ -131,7 +149,8 @@
                 <div class="comment-placeholder">暂无评论数据</div>
               </div>
               <div class="comment-input-area">
-                <input id="commentNickname" type="text" placeholder="您的昵称" class="nickname-input" />
+                <!-- 隐藏昵称输入框，强制匿名用户以“匿名用户”为名 -->
+                <input id="commentNickname" type="text" placeholder="您的昵称" class="nickname-input is-hidden" />
                 <div class="comment-submit-wrap">
                   <input id="commentInput" type="text" placeholder="说点什么吧..." class="message-input" />
                   <button id="submitComment" class="btn btn-primary btn-sm">发送</button>
@@ -140,6 +159,25 @@
             </div>
           </div>
         </div>
+        <!-- 统一列表弹窗 (用于收藏/评论/好友) -->
+        <div id="genericListModal" class="overlay is-hidden" aria-hidden="true">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3 id="genericListTitle">列表</h3>
+              <button id="closeGenericList" class="btn-close">×</button>
+            </div>
+            <div class="dialog-body" style="max-height: 60vh; overflow-y: auto;">
+              <!-- 列表内容渲染区域 -->
+              <div id="genericListContainer" class="generic-list-container"></div>
+            </div>
+            <!-- 好友页面的新增输入框 -->
+            <div id="addFriendArea" class="is-hidden" style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
+              <input type="text" id="friendNameInput" placeholder="输入好友账号名" class="message-input" />
+              <button id="addFriendBtn" class="btn btn-primary btn-sm">添加</button>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <section class="page" id="page-memorial" data-page="memorial" aria-label="活动">
@@ -153,23 +191,27 @@
       <section class="page" id="page-me" data-page="me" aria-label="我的">
         <div class="me-page">
           <div class="me-header">
-            <div class="me-avatar">👤</div>
+            <div class="me-avatar"><img src="./svg/profile.svg" alt="头像" style="width:100%;height:100%;border-radius:50%;" /></div>
             <div class="me-info">
               <h2 id="meUsername">未登录</h2>
               <p id="meRole">角色：访客</p>
             </div>
           </div>
           <div class="me-list">
-            <div class="me-item">
-              <span class="me-item-icon">⭐</span>
+            <div class="me-item" id="openFavorites">
+              <span class="me-item-icon"><img src="./svg/favorites.svg" alt="收藏" width="20" height="20"/></span>
               <span class="me-item-label">我的收藏</span>
             </div>
-            <div class="me-item">
-              <span class="me-item-icon">💬</span>
+            <div class="me-item" id="openMyComments">
+              <span class="me-item-icon"><img src="./svg/messages.svg" alt="评论" width="20" height="20"/></span>
               <span class="me-item-label">我的评论</span>
             </div>
+            <div class="me-item" id="openFriends">
+              <span class="me-item-icon"><img src="./svg/profile.svg" alt="好友" width="20" height="20"/></span>
+              <span class="me-item-label">我的好友</span>
+            </div>
             <div class="me-item" id="openSettings">
-              <span class="me-item-icon">⚙️</span>
+              <span class="me-item-icon"><img src="./svg/settings.svg" alt="设置" width="20" height="20"/></span>
               <span class="me-item-label">设置</span>
             </div>
           </div>
@@ -201,22 +243,28 @@
       </section>
     </main>
 
+    <!-- 全屏图片查看器 -->
+    <div id="imageViewer" class="image-viewer is-hidden" aria-hidden="true">
+      <button id="closeImageViewer" class="btn-close-viewer">×</button>
+      <img id="viewerImage" src="" alt="全屏查看" />
+    </div>
+
     <footer class="app-footer" aria-label="底部导航">
       <nav class="tab-bar" role="tablist" aria-label="主导航">
         <button type="button" class="tab-item is-active" data-tab="map" role="tab" aria-selected="true">
-          <span class="tab-icon" aria-hidden="true">⌖</span>
+          <span class="tab-icon" aria-hidden="true"><img src="./svg/nav.svg" alt="地图" width="24" height="24"/></span>
           <span class="tab-label">地图</span>
         </button>
         <button type="button" class="tab-item" data-tab="memorial" role="tab" aria-selected="false">
-          <span class="tab-icon" aria-hidden="true">★</span>
+          <span class="tab-icon" aria-hidden="true"><img src="./svg/notifications.svg" alt="活动" width="24" height="24"/></span>
           <span class="tab-label">活动</span>
         </button>
         <button type="button" class="tab-item" data-tab="discover" role="tab" aria-selected="false">
-          <span class="tab-icon" aria-hidden="true">◎</span>
+          <span class="tab-icon" aria-hidden="true"><img src="./svg/favorites.svg" alt="发现" width="24" height="24"/></span>
           <span class="tab-label">发现</span>
         </button>
         <button type="button" class="tab-item" data-tab="me" role="tab" aria-selected="false">
-          <span class="tab-icon" aria-hidden="true">👤</span>
+          <span class="tab-icon" aria-hidden="true"><img src="./svg/profile.svg" alt="我的" width="24" height="24"/></span>
           <span class="tab-label">我的</span>
         </button>
       </nav>
