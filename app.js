@@ -56,6 +56,10 @@
   const genericListTitle = document.getElementById("genericListTitle");
   const closeGenericList = document.getElementById("closeGenericList");
   const genericListContainer = document.getElementById("genericListContainer");
+  const meSubpage = document.getElementById("meSubpage");
+  const backSubpage = document.getElementById("backSubpage");
+  const subpageTitle = document.getElementById("subpageTitle");
+  const subpageListContainer = document.getElementById("subpageListContainer");
   const addFriendArea = document.getElementById("addFriendArea");
   const friendNameInput = document.getElementById("friendNameInput");
   const addFriendBtn = document.getElementById("addFriendBtn");
@@ -107,7 +111,16 @@
     !settingsModal ||
     !imageViewer ||
     !viewerImage ||
-    !closeImageViewer
+    !closeImageViewer ||
+    !genericListModal ||
+    !genericListTitle ||
+    !closeGenericList ||
+    !genericListContainer ||
+    !meSubpage ||
+    !backSubpage ||
+    !subpageTitle ||
+    !subpageListContainer ||
+    !addFriendArea
   ) {
     return;
   }
@@ -1132,16 +1145,29 @@
     commentInput.value = "";
   });
 
-  // --- 个人中心子功能模块 ---
+  // --- 个人中心子页面模块 ---
+  
+  const closeSubpage = () => {
+    meSubpage.classList.add("is-hidden");
+    meSubpage.setAttribute("aria-hidden", "true");
+  };
+
+  backSubpage.addEventListener("click", closeSubpage);
+
+  const openSubpage = (title) => {
+    subpageTitle.textContent = title;
+    meSubpage.classList.remove("is-hidden");
+    meSubpage.setAttribute("aria-hidden", "false");
+  };
 
   // 渲染通用列表项
   const renderGenericList = (items, emptyText, onClickCallback) => {
     if (!items || items.length === 0) {
-      genericListContainer.innerHTML = `<div class="comment-placeholder">${emptyText}</div>`;
+      subpageListContainer.innerHTML = `<div class="comment-placeholder">${emptyText}</div>`;
       return;
     }
     
-    genericListContainer.innerHTML = items.map((item, idx) => `
+    subpageListContainer.innerHTML = items.map((item, idx) => `
       <div class="generic-item" data-idx="${idx}">
         <div class="generic-item-content">
           <div class="generic-item-title">${item.title}</div>
@@ -1150,7 +1176,7 @@
       </div>
     `).join('');
 
-    genericListContainer.querySelectorAll('.generic-item').forEach(el => {
+    subpageListContainer.querySelectorAll('.generic-item').forEach(el => {
       el.addEventListener('click', () => {
         const idx = el.getAttribute('data-idx');
         onClickCallback(items[idx]);
@@ -1160,30 +1186,14 @@
 
   // 跳转到地图页面的公共函数
   const switchToMapPage = () => {
-    // 触发全局定义的 setActive 函数
-    const pages = {
-      map: document.getElementById("page-map"),
-      memorial: document.getElementById("page-memorial"),
-      discover: document.getElementById("page-discover"),
-      me: document.getElementById("page-me"),
-    };
-    const tabs = Array.from(document.querySelectorAll(".tab-item"));
-    
-    Object.entries(pages).forEach(([k, el]) => {
-      if (!el) return;
-      el.classList.toggle("is-active", k === "map");
-    });
-    tabs.forEach((btn) => {
-      const active = btn.getAttribute("data-tab") === "map";
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-selected", active ? "true" : "false");
-    });
+    // 使用 hash 作为信号或直接触发全局事件。这里采用直接分发自定义事件的方法，让底部的自执行函数监听到。
+    const event = new CustomEvent("switch-tab", { detail: { tab: "map" } });
+    document.dispatchEvent(event);
   };
 
   // 我的收藏
   openFavorites.addEventListener("click", () => {
     if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
-    genericListTitle.textContent = "我的收藏";
     addFriendArea.classList.add("is-hidden");
     
     const favPoints = (currentUser.favorites || []).map(id => getPointById(id)).filter(Boolean);
@@ -1194,7 +1204,7 @@
     }));
 
     renderGenericList(items, "暂无收藏的标点", (item) => {
-      closeGenericListModal();
+      closeSubpage();
       switchToMapPage();
       const p = getPointById(item.id);
       if (p && map) {
@@ -1203,13 +1213,12 @@
         openDetail(item.id);
       }
     });
-    openGenericListModal();
+    openSubpage("我的收藏");
   });
 
   // 我的评论
   openMyComments.addEventListener("click", () => {
     if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
-    genericListTitle.textContent = "我的评论";
     addFriendArea.classList.add("is-hidden");
 
     let myComments = [];
@@ -1228,7 +1237,7 @@
     });
 
     renderGenericList(myComments, "暂无发表过的评论", (item) => {
-      closeGenericListModal();
+      closeSubpage();
       switchToMapPage();
       const p = getPointById(item.id);
       if (p && map) {
@@ -1237,13 +1246,12 @@
         openDetail(item.id);
       }
     });
-    openGenericListModal();
+    openSubpage("我的评论");
   });
 
   // 我的好友
   openFriends.addEventListener("click", () => {
     if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
-    genericListTitle.textContent = "我的好友";
     addFriendArea.classList.remove("is-hidden"); // 显示添加好友区域
     friendNameInput.value = "";
 
@@ -1253,14 +1261,14 @@
         title: f,
         desc: "已添加的好友"
       }));
-      renderGenericList(items, "暂无好友，在下方输入账号名添加吧", (item) => {
+      renderGenericList(items, "暂无好友，在上方输入账号名添加吧", (item) => {
         // 点击好友可查看其主页，暂只弹窗
         alert(`这是你的好友：${item.title}`);
       });
     };
 
     renderFriends();
-    openGenericListModal();
+    openSubpage("我的好友");
 
     // 添加好友事件只绑定一次（使用覆盖或解绑防止重复）
     addFriendBtn.onclick = () => {
@@ -1299,6 +1307,7 @@
     me: document.getElementById("page-me"),
   };
   const tabs = Array.from(document.querySelectorAll(".tab-item"));
+  const appHeader = document.getElementById("appHeader");
 
   const setActive = (key) => {
     Object.entries(pages).forEach(([k, el]) => {
@@ -1310,6 +1319,15 @@
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
+    
+    // 控制搜索栏只在“地图”页面显示
+    if (appHeader) {
+      if (key === "map") {
+        appHeader.classList.add("is-active");
+      } else {
+        appHeader.classList.remove("is-active");
+      }
+    }
   };
 
   tabs.forEach((btn) => {
@@ -1321,5 +1339,11 @@
       },
       { passive: true }
     );
+  });
+
+  // 监听来自其他模块的跳转请求
+  document.addEventListener("switch-tab", (e) => {
+    const key = e.detail?.tab;
+    if (key && pages[key]) setActive(key);
   });
 })();
