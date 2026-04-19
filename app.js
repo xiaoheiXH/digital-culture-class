@@ -305,6 +305,25 @@
 
   const uuid = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 
+  const checkSharedPoint = () => {
+    const params = new URLSearchParams(window.location.search);
+    const pointId = params.get('point');
+    if (pointId) {
+      const p = getPointById(pointId);
+      if (p) {
+        // 平移并放大地图
+        if (map) {
+          map.setCenter([p.lng, p.lat]);
+          map.setZoom(18);
+        }
+        // 延迟一点打开详情，避免被初始化覆盖
+        setTimeout(() => {
+          openDetail(pointId);
+        }, 300);
+      }
+    }
+  };
+
   // 获取数据
   async function fetchPointsOnline(silent = true) {
     if (!silent) console.log('正在从云端同步数据...');
@@ -333,6 +352,10 @@
           if (!silent) alert('ℹ️ 云端和本地目前均无数据');
         }
       }
+      
+      // 检查是否是通过分享链接进入的
+      checkSharedPoint();
+      
     } catch (error) {
       console.error('❌ 同步失败:', error);
       if (!silent) alert('❌ 同步失败: ' + error.message);
@@ -1135,6 +1158,28 @@
     });
   };
 
+  // 跳转到地图页面的公共函数
+  const switchToMapPage = () => {
+    // 触发全局定义的 setActive 函数
+    const pages = {
+      map: document.getElementById("page-map"),
+      memorial: document.getElementById("page-memorial"),
+      discover: document.getElementById("page-discover"),
+      me: document.getElementById("page-me"),
+    };
+    const tabs = Array.from(document.querySelectorAll(".tab-item"));
+    
+    Object.entries(pages).forEach(([k, el]) => {
+      if (!el) return;
+      el.classList.toggle("is-active", k === "map");
+    });
+    tabs.forEach((btn) => {
+      const active = btn.getAttribute("data-tab") === "map";
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  };
+
   // 我的收藏
   openFavorites.addEventListener("click", () => {
     if (!currentUser || currentUser.role === 'guest') return alert("请先登录专属账号");
@@ -1150,7 +1195,7 @@
 
     renderGenericList(items, "暂无收藏的标点", (item) => {
       closeGenericListModal();
-      document.querySelector('[data-tab="map"]').click();
+      switchToMapPage();
       const p = getPointById(item.id);
       if (p && map) {
         map.setCenter([p.lng, p.lat]);
@@ -1184,7 +1229,7 @@
 
     renderGenericList(myComments, "暂无发表过的评论", (item) => {
       closeGenericListModal();
-      document.querySelector('[data-tab="map"]').click();
+      switchToMapPage();
       const p = getPointById(item.id);
       if (p && map) {
         map.setCenter([p.lng, p.lat]);
