@@ -1574,6 +1574,26 @@ body.is-detail-open #appHeader {
   font-size: 13px;
 }
 
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-close img {
+  display: block;
+}
+
+.btn-close:hover {
+  background: rgba(15, 23, 42, 0.12);
+}
+
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
@@ -1622,6 +1642,10 @@ body.is-detail-open #appHeader {
   justify-content: center;
   transition: background 0.2s;
   z-index: 100001;
+}
+
+.btn-close-viewer img {
+  display: block;
 }
 
 .btn-close-viewer:hover {
