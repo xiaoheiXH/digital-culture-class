@@ -968,7 +968,44 @@ body {
 }
 
 .like-icon {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.like-icon img {
+  display: block;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: max(10px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 2000;
+  min-width: 200px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  opacity: 1;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.toast.is-hidden {
+  display: none;
+}
+
+.toast.success {
+  background: rgba(16, 185, 129, 0.92);
+}
+
+.toast.error {
+  background: rgba(239, 68, 68, 0.92);
 }
 
 /* 详情页新增部分 */
@@ -1216,4 +1253,3 @@ body {
 .tab-item:active {
   opacity: 0.85;
 }
-

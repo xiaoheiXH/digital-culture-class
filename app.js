@@ -42,6 +42,7 @@
   const imageViewer = document.getElementById("imageViewer");
   const viewerImage = document.getElementById("viewerImage");
   const closeImageViewer = document.getElementById("closeImageViewer");
+  const toast = document.getElementById("toast");
 
   // 新增 DOM
   const tabLogin = document.getElementById("tabLogin");
@@ -112,6 +113,7 @@
     !imageViewer ||
     !viewerImage ||
     !closeImageViewer ||
+    !toast ||
     !genericListModal ||
     !genericListTitle ||
     !closeGenericList ||
@@ -147,6 +149,19 @@
   let markers = [];
   let longPressTimer = null;
   let isLoginMode = true;
+  let toastTimer = null;
+
+  const showToast = (message, type = "info", duration = 2200) => {
+    if (!toast) return;
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.classList.remove("is-hidden", "success", "error");
+    if (type === "success") toast.classList.add("success");
+    if (type === "error") toast.classList.add("error");
+    toast.textContent = String(message || "");
+    toastTimer = setTimeout(() => {
+      toast.classList.add("is-hidden");
+    }, duration);
+  };
 
   // 保存用户数据库
   const saveUsersDB = () => {
@@ -376,7 +391,7 @@
   }
 
   // 保存数据
-  async function savePointsOnline(newPoints) {
+  async function savePointsOnline(newPoints, options = {}) {
     points = newPoints;
     // 尝试保存到本地，但如果失败了（空间满）也不要中断流程
     try {
@@ -396,8 +411,12 @@
         throw new Error(errData.error || '保存失败');
       }
       console.log('✅ 已同步至云端');
+      if (options.notice) showToast("✅ 地点上传成功", "success");
+      return true;
     } catch (error) {
       console.error('❌ 无法推送到云端:', error);
+      if (options.notice) showToast("❌ 地点上传失败：" + error.message, "error", 3000);
+      return false;
     }
   }
 
@@ -414,9 +433,7 @@
     }
   };
 
-  const savePoints = () => {
-    savePointsOnline(points);
-  };
+  const savePoints = (options = {}) => savePointsOnline(points, options);
 
   function loadPoints() {
     try {
@@ -985,7 +1002,7 @@
     reader.readAsDataURL(file);
   });
 
-  pointForm.addEventListener("submit", (e) => {
+  pointForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = pointName.value.trim();
     const desc = pointDesc.value.trim();
@@ -1013,7 +1030,7 @@
         updatedAt: Date.now(),
       });
     }
-    savePoints();
+    await savePoints({ notice: true });
     renderPoints();
     closeForm();
   });

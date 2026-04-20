@@ -117,7 +117,7 @@
                 <img src="./svg/favorites.svg" alt="收藏" width="20" height="20" />
               </button>
               <button id="btnShare" class="btn-icon" title="转发/分享">
-                <img src="./svg/messages.svg" alt="转发" width="20" height="20" />
+                <img src="./svg/share.svg" alt="转发" width="20" height="20" />
               </button>
             </div>
           </div>
@@ -130,7 +130,9 @@
             
             <div class="detail-like-wrap">
               <button id="btnLike" class="btn-like">
-                <span class="like-icon">👍</span> <span class="like-text">点赞</span> <span id="likeCount">0</span>
+                <span class="like-icon"><img src="./svg/like.svg" alt="点赞" width="18" height="18" /></span>
+                <span class="like-text">点赞</span>
+                <span id="likeCount">0</span>
               </button>
             </div>
 
@@ -169,11 +171,6 @@
             <div class="dialog-body" style="max-height: 60vh; overflow-y: auto;">
               <!-- 列表内容渲染区域 -->
               <div id="genericListContainer" class="generic-list-container"></div>
-            </div>
-            <!-- 好友页面的新增输入框 -->
-            <div id="addFriendArea" class="is-hidden" style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
-              <input type="text" id="friendNameInput" placeholder="输入好友账号名" class="message-input" />
-              <button id="addFriendBtn" class="btn btn-primary btn-sm">添加</button>
             </div>
           </div>
         </div>
@@ -265,6 +262,8 @@
       <button id="closeImageViewer" class="btn-close-viewer">×</button>
       <img id="viewerImage" src="" alt="全屏查看" />
     </div>
+    
+    <div id="toast" class="toast is-hidden" aria-live="polite"></div>
 
     <footer class="app-footer" aria-label="底部导航">
       <nav class="tab-bar" role="tablist" aria-label="主导航">
