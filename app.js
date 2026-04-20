@@ -39,6 +39,8 @@
   const openSettings = document.getElementById("openSettings");
   const closeSettings = document.getElementById("closeSettings");
   const settingsModal = document.getElementById("settingsModal");
+  const togglePerfMode = document.getElementById("togglePerfMode");
+  const perfModeState = document.getElementById("perfModeState");
   const imageViewer = document.getElementById("imageViewer");
   const viewerImage = document.getElementById("viewerImage");
   const closeImageViewer = document.getElementById("closeImageViewer");
@@ -68,6 +70,7 @@
   const STORAGE_KEY = "campus_map_points_v2";
   const USER_KEY = "campus_map_user";
   const USERS_DB_KEY = "campus_map_users_db"; // 本地用户数据库
+  const PERF_MODE_KEY = "campus_map_perf_mode";
 
   if (
     !mapContent ||
@@ -110,6 +113,8 @@
     !openSettings ||
     !closeSettings ||
     !settingsModal ||
+    !togglePerfMode ||
+    !perfModeState ||
     !imageViewer ||
     !viewerImage ||
     !closeImageViewer ||
@@ -150,6 +155,7 @@
   let longPressTimer = null;
   let isLoginMode = true;
   let toastTimer = null;
+  let perfModeEnabled = localStorage.getItem(PERF_MODE_KEY) === "1";
 
   const showToast = (message, type = "info", duration = 2200) => {
     if (!toast) return;
@@ -161,6 +167,112 @@
     toastTimer = setTimeout(() => {
       toast.classList.add("is-hidden");
     }, duration);
+  };
+
+  const updatePerfModeUI = () => {
+    perfModeState.textContent = perfModeEnabled ? "开" : "关";
+    perfModeState.classList.toggle("is-on", perfModeEnabled);
+  };
+
+  const applyPerfModeToMap = () => {
+    if (!map) return;
+    try {
+      map.setStatus({
+        rotateEnable: !perfModeEnabled,
+        pitchEnable: !perfModeEnabled,
+        animateEnable: !perfModeEnabled,
+      });
+    } catch {}
+    try {
+      map.setRotation(0);
+    } catch {}
+    try {
+      map.setPitch(0);
+    } catch {}
+    try {
+      map.setZooms(perfModeEnabled ? [15, 19] : [3, 20]);
+    } catch {}
+  };
+
+  const isDataUrl = (v) => typeof v === "string" && v.startsWith("data:image/");
+
+  const loadImage = (src) =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("图片加载失败"));
+      img.src = src;
+    });
+
+  const canvasToDataUrl = async (canvas, mime, quality) => {
+    try {
+      const out = canvas.toDataURL(mime, quality);
+      if (typeof out === "string" && out.startsWith("data:image/")) return out;
+    } catch {}
+    return canvas.toDataURL("image/jpeg", quality);
+  };
+
+  const shrinkImageDataUrl = async (dataUrl, options = {}) => {
+    const {
+      maxSide = 256,
+      mime = "image/webp",
+      quality = 0.72,
+      minQuality = 0.55,
+      maxChars = 220_000,
+    } = options;
+
+    if (!isDataUrl(dataUrl)) return dataUrl;
+    if (dataUrl.length <= maxChars) return dataUrl;
+
+    const img = await loadImage(dataUrl);
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    if (!w || !h) return dataUrl;
+
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, tw, th);
+
+    let q = quality;
+    let out = await canvasToDataUrl(canvas, mime, q);
+
+    if (mime === "image/webp" && !out.startsWith("data:image/webp")) {
+      out = await canvasToDataUrl(canvas, "image/jpeg", q);
+    }
+
+    while (out.length > maxChars && q > minQuality) {
+      q = Math.max(minQuality, q - 0.08);
+      out = await canvasToDataUrl(canvas, out.startsWith("data:image/webp") ? "image/webp" : "image/jpeg", q);
+    }
+
+    return out;
+  };
+
+  const shrinkIconsInPoints = async (pts) => {
+    let changed = false;
+    const out = [];
+    for (const p of pts) {
+      if (!p || typeof p !== "object") continue;
+      if (isDataUrl(p.icon) && p.icon.length > 220_000) {
+        try {
+          const newIcon = await shrinkImageDataUrl(p.icon);
+          if (newIcon !== p.icon) {
+            out.push({ ...p, icon: newIcon });
+            changed = true;
+            continue;
+          }
+        } catch {}
+      }
+      out.push(p);
+    }
+    return { points: out, changed };
   };
 
   // 保存用户数据库
@@ -265,6 +377,7 @@
 
   // 设置弹窗开关
   openSettings.addEventListener("click", () => {
+    updatePerfModeUI();
     settingsModal.classList.remove("is-hidden");
     settingsModal.setAttribute("aria-hidden", "false");
   });
@@ -277,6 +390,16 @@
   closeSettings.addEventListener("click", closeSettingsModal);
   settingsModal.addEventListener("click", (e) => {
     if (e.target === settingsModal) closeSettingsModal();
+  });
+
+  togglePerfMode.addEventListener("click", () => {
+    perfModeEnabled = !perfModeEnabled;
+    localStorage.setItem(PERF_MODE_KEY, perfModeEnabled ? "1" : "0");
+    updatePerfModeUI();
+    showToast("已切换性能模式，正在刷新以生效…", "success", 1200);
+    setTimeout(() => {
+      location.reload();
+    }, 650);
   });
 
   // 手动同步
@@ -358,8 +481,18 @@
     try {
       const response = await fetch('/api/points');
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || '云端未响应');
+        let message = `云端未响应（${response.status}）`;
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const err = await response.json();
+            message = err?.error || message;
+          } else {
+            const t = await response.text();
+            if (t) message = t;
+          }
+        } catch {}
+        throw new Error(message);
       }
       const onlinePoints = await response.json();
       
@@ -373,7 +506,11 @@
         } else if (onlinePoints.length > 0) {
           // 云端有数据，以云端为准
           points = onlinePoints;
-          savePointsLocal(points);
+          try {
+            savePointsLocal(points);
+          } catch {
+            showToast("本地存储空间不足：已跳过本地备份", "error", 2600);
+          }
           renderPoints();
           if (!silent) alert('✅ 同步成功：已获取云端最新 ' + onlinePoints.length + ' 个地点');
         } else {
@@ -401,14 +538,57 @@
     }
 
     try {
-      const response = await fetch('/api/points', {
+      let pointsToSend = newPoints;
+      let bodyStr = JSON.stringify(pointsToSend);
+      if (bodyStr.length > 3_000_000) {
+        const shrunk = await shrinkIconsInPoints(pointsToSend);
+        if (shrunk.changed) {
+          pointsToSend = shrunk.points;
+          points = pointsToSend;
+          try {
+            savePointsLocal(points);
+          } catch {}
+          bodyStr = JSON.stringify(pointsToSend);
+        }
+      }
+
+      const doPost = async () =>
+        fetch('/api/points', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newPoints)
+        body: bodyStr
       });
+      
+      let response = await doPost();
+      if (response.status === 413) {
+        const shrunk = await shrinkIconsInPoints(pointsToSend);
+        if (shrunk.changed) {
+          pointsToSend = shrunk.points;
+          points = pointsToSend;
+          try {
+            savePointsLocal(points);
+          } catch {}
+          bodyStr = JSON.stringify(pointsToSend);
+          response = await doPost();
+        }
+      }
+
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || '保存失败');
+        let message = `保存失败（${response.status}）`;
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const errData = await response.json();
+            message = errData?.error || message;
+          } else {
+            const t = await response.text();
+            if (t) message = t;
+          }
+        } catch {}
+        if (response.status === 413) {
+          message = "数据过大（图片/图标太大），已尝试压缩后仍超限";
+        }
+        throw new Error(message);
       }
       console.log('✅ 已同步至云端');
       if (options.notice) showToast("✅ 地点上传成功", "success");
@@ -473,8 +653,12 @@
     map = new AMap.Map('mapContent', {
       zoom: 16.5, // 调整为接近参考图的比例尺
       center: ZC_CENTER,
-      viewMode: '3D',
+      viewMode: perfModeEnabled ? '2D' : '3D',
+      animateEnable: !perfModeEnabled,
+      zooms: perfModeEnabled ? [15, 19] : [3, 20],
     });
+    
+    applyPerfModeToMap();
 
     // 限制拖动范围：福州大学至诚学院周边 (放宽左右距离)
     const bounds = new AMap.Bounds(
@@ -704,11 +888,19 @@
     }
     formModal.classList.remove("is-hidden");
     formModal.setAttribute("aria-hidden", "false");
+    formModal.inert = false;
+    setTimeout(() => {
+      pointName.focus();
+    }, 0);
   };
 
   const closeForm = () => {
+    if (formModal.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     formModal.classList.add("is-hidden");
     formModal.setAttribute("aria-hidden", "true");
+    formModal.inert = true;
   };
 
   // 图片查看器逻辑
@@ -779,6 +971,7 @@
     }
     detailView.classList.remove("is-hidden");
     detailView.setAttribute("aria-hidden", "false");
+    document.body.classList.add("is-detail-open");
   };
 
   // 收藏状态更新
@@ -933,6 +1126,7 @@
   const closeDetail = () => {
     detailView.classList.add("is-hidden");
     detailView.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("is-detail-open");
   };
 
   const renderComments = (comments) => {
@@ -988,18 +1182,24 @@
     hideMenu();
   });
 
-  pointIconFile.addEventListener("change", (e) => {
+  pointIconFile.addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      iconDataUrl = typeof reader.result === "string" ? reader.result : "";
-      if (iconDataUrl) {
-        iconPreview.src = iconDataUrl;
-        iconPreview.classList.remove("is-hidden");
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const reader = new FileReader();
+      const raw = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.onerror = () => reject(new Error("读取文件失败"));
+        reader.readAsDataURL(file);
+      });
+      if (!raw) return;
+      const compressed = await shrinkImageDataUrl(raw, { maxSide: 256, maxChars: 180_000 });
+      iconDataUrl = compressed;
+      iconPreview.src = iconDataUrl;
+      iconPreview.classList.remove("is-hidden");
+    } catch (err) {
+      showToast("图标处理失败", "error", 2600);
+    }
   });
 
   pointForm.addEventListener("submit", async (e) => {
@@ -1048,11 +1248,14 @@
     }
   });
 
-  // 搜索框输入事件
+  let searchDebounceTimer = null;
   searchInput.addEventListener("input", (e) => {
     const text = e.target.value.trim();
-    renderPoints(text);
-    renderSearchResults(text);
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      renderPoints(text);
+      renderSearchResults(text);
+    }, 120);
   });
 
   // 渲染搜索结果列表

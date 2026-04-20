@@ -18,7 +18,7 @@
     <div id="loginOverlay" class="login-overlay">
       <div class="login-card">
         <div class="login-header">
-          <img src="https://via.placeholder.com/60" alt="Logo" class="login-logo" />
+        <img src="./svg/marker.svg" alt="Logo" class="login-logo" />
           <h2>校园导览系统</h2>
           <div class="login-tabs">
             <button type="button" id="tabLogin" class="login-tab active">登录</button>
@@ -248,6 +248,13 @@
                     <span class="settings-item-desc">手动从服务器获取最新标点数据</span>
                   </div>
                   <span class="settings-item-action">☁️</span>
+                </div>
+                <div class="settings-item" id="togglePerfMode">
+                  <div class="settings-item-info">
+                    <span class="settings-item-title">性能模式</span>
+                    <span class="settings-item-desc">降低渲染开销，减少卡顿（切换后自动刷新）</span>
+                  </div>
+                  <span id="perfModeState" class="settings-switch">关</span>
                 </div>
                 <!-- 未来可以增加更多设置项 -->
               </div>

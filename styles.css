@@ -346,6 +346,25 @@
   font-size: 18px;
 }
 
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.settings-switch.is-on {
+  background: rgba(16, 185, 129, 0.16);
+  color: #059669;
+}
+
 .login-btn-me {
   width: 100%;
   padding: 14px;
@@ -855,12 +874,21 @@ body {
 
 /* 详情页 */
 .detail-view {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 1200;
   background: var(--page-bg);
   display: flex;
   flex-direction: column;
+}
+
+body.is-detail-open {
+  overflow: hidden;
+}
+
+body.is-detail-open .app-footer,
+body.is-detail-open #appHeader {
+  display: none;
 }
 
 .detail-header {
