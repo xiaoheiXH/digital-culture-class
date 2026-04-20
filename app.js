@@ -45,6 +45,11 @@
   const activityDayRow = document.getElementById("activityDayRow");
   const activityList = document.getElementById("activityList");
   const btnAddEvent = document.getElementById("btnAddEvent");
+  const openCalendar = document.getElementById("openCalendar");
+  const calendarModal = document.getElementById("calendarModal");
+  const closeCalendar = document.getElementById("closeCalendar");
+  const monthPicker = document.getElementById("monthPicker");
+  const calendarGrid = document.getElementById("calendarGrid");
   const eventDetailView = document.getElementById("eventDetailView");
   const closeEventDetail = document.getElementById("closeEventDetail");
   const eventDetailImage = document.getElementById("eventDetailImage");
@@ -142,6 +147,11 @@
     !activityDayRow ||
     !activityList ||
     !btnAddEvent ||
+    !openCalendar ||
+    !calendarModal ||
+    !closeCalendar ||
+    !monthPicker ||
+    !calendarGrid ||
     !eventDetailView ||
     !closeEventDetail ||
     !eventDetailImage ||
@@ -205,6 +215,7 @@
   let events = [];
   let selectedEventId = null;
   let selectedActivityDate = "";
+  let selectedActivityMonth = "";
   let eventImageDataUrl = "";
 
   const showToast = (message, type = "info", duration = 2200) => {
@@ -226,6 +237,7 @@
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const toDateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const toMonthKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
   const parseDateKey = (s) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
     if (!m) return null;
@@ -465,6 +477,89 @@
   const ensureActivityDate = () => {
     const today = new Date();
     if (!selectedActivityDate) selectedActivityDate = toDateKey(today);
+    const d = parseDateKey(selectedActivityDate) || today;
+    if (!selectedActivityMonth) selectedActivityMonth = toMonthKey(d);
+  };
+
+  const clampDateToMonth = (d, monthKey) => {
+    const base = new Date(d);
+    const m = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ""));
+    if (!m) return base;
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const first = new Date(y, mo, 1);
+    const last = new Date(y, mo + 1, 0);
+    if (base < first) return first;
+    if (base > last) return last;
+    return base;
+  };
+
+  const openCalendarModal = () => {
+    ensureActivityDate();
+    monthPicker.value = selectedActivityMonth || toMonthKey(new Date());
+    renderCalendarGrid();
+    calendarModal.classList.remove("is-hidden");
+    calendarModal.setAttribute("aria-hidden", "false");
+  };
+
+  const closeCalendarModal = () => {
+    calendarModal.classList.add("is-hidden");
+    calendarModal.setAttribute("aria-hidden", "true");
+  };
+
+  closeCalendar.addEventListener("click", closeCalendarModal);
+  calendarModal.addEventListener("click", (e) => {
+    if (e.target === calendarModal) closeCalendarModal();
+  });
+  openCalendar.addEventListener("click", openCalendarModal);
+  monthPicker.addEventListener("change", () => {
+    selectedActivityMonth = monthPicker.value || selectedActivityMonth;
+    renderCalendarGrid();
+  });
+
+  const renderCalendarGrid = () => {
+    const mk = monthPicker.value || selectedActivityMonth;
+    const m = /^(\d{4})-(\d{2})$/.exec(String(mk || ""));
+    if (!m) return;
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const first = new Date(y, mo, 1);
+    const daysInMonth = new Date(y, mo + 1, 0).getDate();
+    const weekdayMon0 = (first.getDay() + 6) % 7;
+    const selected = parseDateKey(selectedActivityDate);
+
+    const cells = [];
+    for (let i = 0; i < weekdayMon0; i++) {
+      cells.push({ empty: true });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(y, mo, d);
+      const key = toDateKey(dt);
+      const active = selected && toDateKey(selected) === key;
+      cells.push({ day: d, key, active });
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push({ empty: true });
+    }
+
+    calendarGrid.innerHTML = cells
+      .map((c) => {
+        if (c.empty) return `<button type="button" class="cal-day is-empty" aria-hidden="true"></button>`;
+        return `<button type="button" class="cal-day${c.active ? " is-active" : ""}" data-key="${c.key}">${c.day}</button>`;
+      })
+      .join("");
+
+    calendarGrid.querySelectorAll(".cal-day[data-key]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-key");
+        if (!key) return;
+        selectedActivityDate = key;
+        const d = parseDateKey(key);
+        if (d) selectedActivityMonth = toMonthKey(d);
+        closeCalendarModal();
+        renderActivityPage();
+      });
+    });
   };
 
   const openEventDetail = (eventId) => {
@@ -499,29 +594,59 @@
     if (e.target === eventDetailView) closeEventDetailView();
   });
 
+  let activitySwipeStartX = null;
+  let activitySwipeStartY = null;
+
+  const moveSelectedWeek = (deltaDays) => {
+    ensureActivityDate();
+    const mk = selectedActivityMonth;
+    const cur = parseDateKey(selectedActivityDate) || new Date();
+    const next = new Date(cur);
+    next.setDate(next.getDate() + deltaDays);
+    const clamped = clampDateToMonth(next, mk);
+    selectedActivityDate = toDateKey(clamped);
+    renderActivityPage();
+  };
+
   const renderActivityDays = () => {
     ensureActivityDate();
+    const mk = selectedActivityMonth;
+    const m = /^(\d{4})-(\d{2})$/.exec(String(mk || ""));
     const selectedDate = parseDateKey(selectedActivityDate) || new Date();
-    const start = new Date(selectedDate);
-    start.setDate(start.getDate() - 7);
+    const selected = clampDateToMonth(selectedDate, mk);
+
+    const y = m ? Number(m[1]) : selected.getFullYear();
+    const mo = m ? Number(m[2]) - 1 : selected.getMonth();
+    const first = new Date(y, mo, 1);
+    const last = new Date(y, mo + 1, 0);
+
+    const dowMon0 = (selected.getDay() + 6) % 7;
+    const weekStart = new Date(selected);
+    weekStart.setDate(selected.getDate() - dowMon0);
 
     activityDayRow.innerHTML = "";
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const inMonth = d >= first && d <= last;
       const key = toDateKey(d);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "day-chip" + (key === selectedActivityDate ? " is-active" : "");
-      btn.innerHTML = `<div class="dow">${getDowCN(d)}</div><div class="dom">${d.getDate()}</div>`;
+      btn.className =
+        "day-chip" +
+        (inMonth ? "" : " is-disabled") +
+        (inMonth && key === selectedActivityDate ? " is-active" : "");
+      btn.innerHTML = `<div class="dom">${inMonth ? d.getDate() : ""}</div>`;
       btn.addEventListener("click", () => {
+        if (!inMonth) return;
         selectedActivityDate = key;
+        selectedActivityMonth = toMonthKey(d);
         renderActivityPage();
       });
       activityDayRow.appendChild(btn);
     }
 
-    activityDateLabel.textContent = formatCNDate(selectedDate);
+    activityDateLabel.textContent = formatCNDate(selected);
   };
 
   const renderActivityList = () => {
@@ -537,18 +662,24 @@
 
     activityList.innerHTML = list
       .map(
-        (e) => `
-      <div class="event-card" data-id="${e.id}">
-        <div class="event-cover">
-          ${e.image ? `<img src="${e.image}" alt="配图" />` : "配图"}
-        </div>
-        <div class="event-title">${e.title || "活动标题"}</div>
-      </div>
-    `
+        (e) => {
+          const title = e.title || "活动标题";
+          const desc = String(e.content || "").replace(/\s+/g, " ").slice(0, 46);
+          const img = e.image || "";
+          return `
+            <div class="activity-item" data-id="${e.id}">
+              ${img ? `<img class="activity-thumb" src="${img}" alt="${title}" />` : `<div class="activity-thumb"></div>`}
+              <div class="activity-info">
+                <div class="activity-title">${title}</div>
+                <div class="activity-desc">${desc || "活动公告"}</div>
+              </div>
+            </div>
+          `;
+        }
       )
       .join("");
 
-    activityList.querySelectorAll(".event-card").forEach((el) => {
+    activityList.querySelectorAll(".activity-item").forEach((el) => {
       el.addEventListener("click", () => {
         const id = el.getAttribute("data-id");
         if (id) openEventDetail(id);
@@ -565,6 +696,38 @@
       btnAddEvent.classList.add("is-hidden");
     }
   };
+
+  activityDayRow.addEventListener(
+    "touchstart",
+    (e) => {
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      activitySwipeStartX = t.clientX;
+      activitySwipeStartY = t.clientY;
+    },
+    { passive: true }
+  );
+
+  activityDayRow.addEventListener(
+    "touchend",
+    (e) => {
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      if (activitySwipeStartX == null || activitySwipeStartY == null) return;
+      const dx = t.clientX - activitySwipeStartX;
+      const dy = t.clientY - activitySwipeStartY;
+      activitySwipeStartX = null;
+      activitySwipeStartY = null;
+
+      if (Math.abs(dx) < 42 || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0) {
+        moveSelectedWeek(7);
+      } else {
+        moveSelectedWeek(-7);
+      }
+    },
+    { passive: true }
+  );
 
   const resetEventForm = () => {
     eventForm.reset();
@@ -639,6 +802,8 @@
     const ok = await saveEventsOnline({ notice: true });
     if (ok) {
       selectedActivityDate = date;
+      const d = parseDateKey(date);
+      if (d) selectedActivityMonth = toMonthKey(d);
       closeEventFormModal();
       renderActivityPage();
     }

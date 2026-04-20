@@ -180,11 +180,21 @@
       <section class="page" id="page-memorial" data-page="memorial" aria-label="活动">
         <div class="activity-page">
           <div class="activity-top">
-            <div id="activityDateLabel" class="activity-date-label">日期</div>
-            <div id="activityDayRow" class="activity-day-row" aria-label="日期选择"></div>
+            <div class="activity-header">
+              <div id="activityDateLabel" class="activity-date-label">日期</div>
+              <div class="activity-actions">
+                <button id="openCalendar" type="button" class="btn btn-light btn-sm">切换</button>
+                <button id="btnAddEvent" type="button" class="btn btn-primary btn-sm is-hidden">发布</button>
+              </div>
+            </div>
+            <div class="activity-week">
+              <div class="activity-weekdays" aria-hidden="true">
+                <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+              </div>
+              <div id="activityDayRow" class="activity-day-row" aria-label="日期选择"></div>
+            </div>
           </div>
           <div id="activityList" class="activity-list"></div>
-          <button id="btnAddEvent" type="button" class="fab-add is-hidden" aria-label="发布活动">+</button>
         </div>
       </section>
 
@@ -326,6 +336,25 @@
               <button type="submit" class="btn btn-primary">发布</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+    
+    <div id="calendarModal" class="overlay is-hidden" aria-hidden="true">
+      <div class="dialog" role="dialog" aria-modal="true" aria-label="选择日期">
+        <div class="dialog-header">
+          <h3>选择日期</h3>
+          <button id="closeCalendar" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <label class="field">
+            <span class="field-label">年月</span>
+            <input id="monthPicker" type="month" />
+          </label>
+          <div class="calendar-grid-header" aria-hidden="true">
+            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+          </div>
+          <div id="calendarGrid" class="calendar-grid"></div>
         </div>
       </div>
     </div>
