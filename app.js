@@ -51,11 +51,16 @@
   const monthPicker = document.getElementById("monthPicker");
   const calendarGrid = document.getElementById("calendarGrid");
   const eventDetailView = document.getElementById("eventDetailView");
+  const backEventDetail = document.getElementById("backEventDetail");
+  const deleteEvent = document.getElementById("deleteEvent");
   const closeEventDetail = document.getElementById("closeEventDetail");
+  const eventDetailBody = document.getElementById("eventDetailBody");
   const eventDetailImage = document.getElementById("eventDetailImage");
   const eventDetailImagePlaceholder = document.getElementById("eventDetailImagePlaceholder");
   const eventDetailTitle = document.getElementById("eventDetailTitle");
   const eventDetailContent = document.getElementById("eventDetailContent");
+  const eventScrollIndicator = document.getElementById("eventScrollIndicator");
+  const eventScrollThumb = document.getElementById("eventScrollThumb");
   const eventFormModal = document.getElementById("eventFormModal");
   const closeEventForm = document.getElementById("closeEventForm");
   const cancelEventForm = document.getElementById("cancelEventForm");
@@ -153,11 +158,16 @@
     !monthPicker ||
     !calendarGrid ||
     !eventDetailView ||
+    !backEventDetail ||
+    !deleteEvent ||
     !closeEventDetail ||
+    !eventDetailBody ||
     !eventDetailImage ||
     !eventDetailImagePlaceholder ||
     !eventDetailTitle ||
     !eventDetailContent ||
+    !eventScrollIndicator ||
+    !eventScrollThumb ||
     !eventFormModal ||
     !closeEventForm ||
     !cancelEventForm ||
@@ -572,14 +582,28 @@
       eventDetailImage.src = ev.image;
       eventDetailImage.classList.remove("is-hidden");
       eventDetailImagePlaceholder.classList.add("is-hidden");
+      eventDetailImage.style.cursor = "pointer";
+      eventDetailImage.onclick = () => openImageViewer(ev.image);
     } else {
       eventDetailImage.classList.add("is-hidden");
       eventDetailImage.removeAttribute("src");
       eventDetailImagePlaceholder.classList.remove("is-hidden");
+      eventDetailImage.style.cursor = "";
+      eventDetailImage.onclick = null;
+    }
+    if (currentUser?.role === "admin") {
+      deleteEvent.classList.remove("is-hidden");
+    } else {
+      deleteEvent.classList.add("is-hidden");
     }
     eventDetailView.classList.remove("is-hidden");
     eventDetailView.setAttribute("aria-hidden", "false");
     document.body.classList.add("is-event-open");
+    requestAnimationFrame(() => {
+      updateEventScrollIndicator();
+      eventDetailBody.scrollTop = 0;
+      updateEventScrollIndicator();
+    });
   };
 
   const closeEventDetailView = () => {
@@ -589,9 +613,46 @@
     selectedEventId = null;
   };
 
+  const updateEventScrollIndicator = () => {
+    const el = eventDetailBody;
+    const track = eventScrollIndicator;
+    const thumb = eventScrollThumb;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max <= 0) {
+      track.style.display = "none";
+      return;
+    }
+    track.style.display = "block";
+    const ratio = el.clientHeight / el.scrollHeight;
+    const trackH = track.clientHeight;
+    const thumbH = Math.max(18, Math.round(trackH * ratio));
+    const top = Math.round(((trackH - thumbH) * el.scrollTop) / max);
+    thumb.style.height = `${thumbH}px`;
+    thumb.style.top = `${top}px`;
+  };
+
   closeEventDetail.addEventListener("click", closeEventDetailView);
+  backEventDetail.addEventListener("click", closeEventDetailView);
   eventDetailView.addEventListener("click", (e) => {
     if (e.target === eventDetailView) closeEventDetailView();
+  });
+  
+  eventDetailBody.addEventListener("scroll", () => {
+    updateEventScrollIndicator();
+  });
+
+  deleteEvent.addEventListener("click", async () => {
+    if (currentUser?.role !== "admin") return;
+    if (!selectedEventId) return;
+    const ev = events.find((x) => x.id === selectedEventId);
+    const ok = window.confirm(`确认删除活动「${ev?.title || "未命名活动"}」？`);
+    if (!ok) return;
+    events = events.filter((x) => x.id !== selectedEventId);
+    const saved = await saveEventsOnline({ notice: true });
+    if (saved) {
+      closeEventDetailView();
+      renderActivityPage();
+    }
   });
 
   let activitySwipeStartX = null;

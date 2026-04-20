@@ -295,12 +295,21 @@
     </div>
     
     <div id="eventDetailView" class="event-detail is-hidden" aria-hidden="true">
-      <button id="closeEventDetail" class="btn-close-viewer">×</button>
-      <div class="event-detail-body">
+      <div class="event-detail-header">
+        <button id="backEventDetail" type="button" class="btn-back">← 返回</button>
+        <div class="event-detail-actions">
+          <button id="deleteEvent" type="button" class="btn btn-light btn-sm is-hidden">删除</button>
+          <button id="closeEventDetail" type="button" class="btn-close">×</button>
+        </div>
+      </div>
+      <div id="eventDetailBody" class="event-detail-body">
         <img id="eventDetailImage" class="event-detail-image is-hidden" alt="活动配图" />
         <div id="eventDetailImagePlaceholder" class="event-detail-image placeholder">配图</div>
         <h2 id="eventDetailTitle" class="event-detail-title">活动标题</h2>
         <div id="eventDetailContent" class="event-detail-content">活动公告</div>
+      </div>
+      <div id="eventScrollIndicator" class="scroll-indicator" aria-hidden="true">
+        <div id="eventScrollThumb" class="scroll-thumb"></div>
       </div>
     </div>
     
