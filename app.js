@@ -9,11 +9,13 @@
   const pointForm = document.getElementById("pointForm");
   const pointName = document.getElementById("pointName");
   const pointIconFile = document.getElementById("pointIconFile");
+  const pointSubtitle = document.getElementById("pointSubtitle");
   const pointDesc = document.getElementById("pointDesc");
   const iconPreview = document.getElementById("iconPreview");
   const cancelForm = document.getElementById("cancelForm");
   const detailView = document.getElementById("detailView");
   const detailName = document.getElementById("detailName");
+  const detailDistance = document.getElementById("detailDistance");
   const detailDesc = document.getElementById("detailDesc");
   const detailIcon = document.getElementById("detailIcon");
   const backDetail = document.getElementById("backDetail");
@@ -41,6 +43,8 @@
   const settingsModal = document.getElementById("settingsModal");
   const togglePerfMode = document.getElementById("togglePerfMode");
   const perfModeState = document.getElementById("perfModeState");
+  const toggleMarkerOpenMode = document.getElementById("toggleMarkerOpenMode");
+  const markerOpenModeState = document.getElementById("markerOpenModeState");
   const activityDateLabel = document.getElementById("activityDateLabel");
   const activityDayRow = document.getElementById("activityDayRow");
   const activityList = document.getElementById("activityList");
@@ -106,6 +110,7 @@
   const USER_KEY = "campus_map_user";
   const USERS_DB_KEY = "campus_map_users_db"; // 本地用户数据库
   const PERF_MODE_KEY = "campus_map_perf_mode";
+  const MARKER_OPEN_MODE_KEY = "campus_map_marker_open_mode";
   const EVENTS_KEY = "campus_map_events_v1";
 
   if (
@@ -119,11 +124,13 @@
     !pointForm ||
     !pointName ||
     !pointIconFile ||
+    !pointSubtitle ||
     !pointDesc ||
     !iconPreview ||
     !cancelForm ||
     !detailView ||
     !detailName ||
+    !detailDistance ||
     !detailDesc ||
     !detailIcon ||
     !backDetail ||
@@ -151,6 +158,8 @@
     !settingsModal ||
     !togglePerfMode ||
     !perfModeState ||
+    !toggleMarkerOpenMode ||
+    !markerOpenModeState ||
     !activityDateLabel ||
     !activityDayRow ||
     !activityList ||
@@ -227,6 +236,7 @@
   let isLoginMode = true;
   let toastTimer = null;
   let perfModeEnabled = localStorage.getItem(PERF_MODE_KEY) === "1";
+  let markerOpenMode = localStorage.getItem(MARKER_OPEN_MODE_KEY) || "single";
   let lastUserLngLat = null;
   let events = [];
   let selectedEventId = null;
@@ -249,6 +259,12 @@
   const updatePerfModeUI = () => {
     perfModeState.textContent = perfModeEnabled ? "开" : "关";
     perfModeState.classList.toggle("is-on", perfModeEnabled);
+  };
+  
+  const updateMarkerOpenModeUI = () => {
+    const on = markerOpenMode !== "double";
+    markerOpenModeState.textContent = on ? "开" : "关";
+    markerOpenModeState.classList.toggle("is-on", on);
   };
 
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -950,7 +966,8 @@
       .map((p) => {
         const img = (p.images && p.images[0]) || p.icon || "";
         const dist = formatDistance(haversineKm(base, [p.lng, p.lat]));
-        const meta = dist ? `距离 ${dist}·热门打卡点` : "热门打卡点";
+        const subtitle = (p.subtitle || "").trim();
+        const meta = dist ? `距离 ${dist}${subtitle ? `·${subtitle}` : ""}` : (subtitle || "");
         const name = p.name || "未命名地点";
         const desc = (p.desc || "").replace(/\s+/g, " ").slice(0, 26);
         return `
@@ -1096,6 +1113,7 @@
   // 设置弹窗开关
   openSettings.addEventListener("click", () => {
     updatePerfModeUI();
+    updateMarkerOpenModeUI();
     settingsModal.classList.remove("is-hidden");
     settingsModal.setAttribute("aria-hidden", "false");
   });
@@ -1118,6 +1136,15 @@
     setTimeout(() => {
       location.reload();
     }, 650);
+  });
+
+  toggleMarkerOpenMode.addEventListener("click", () => {
+    markerOpenMode = markerOpenMode === "double" ? "single" : "double";
+    localStorage.setItem(MARKER_OPEN_MODE_KEY, markerOpenMode);
+    updateMarkerOpenModeUI();
+    const text = markerOpenMode === "double" ? "已切换：双击打开详情" : "已切换：单击打开详情";
+    showToast(text, "success", 1600);
+    renderPoints(searchInput.value.trim());
   });
 
   // 手动同步
@@ -1562,18 +1589,37 @@
         extData: { id: p.id }
       });
 
-      // 标记点击事件 - 弹出修改/删除菜单
+      const openBySingle = markerOpenMode !== "double";
+
       marker.on('click', (e) => {
-        // 阻止事件冒泡到地图
         if (e.originEvent) e.originEvent.stopPropagation();
         selectedId = p.id;
-        showMenu(e.originEvent.clientX, e.originEvent.clientY, "marker", p.id);
+        if (openBySingle) {
+          openDetail(p.id);
+        } else if (currentUser?.role === "admin") {
+          showMenu(e.originEvent.clientX, e.originEvent.clientY, "marker", p.id);
+        }
       });
 
-      // 标记双击事件 - 打开详情
       marker.on('dblclick', (e) => {
         if (e.originEvent) e.originEvent.stopPropagation();
-        openDetail(p.id);
+        selectedId = p.id;
+        if (openBySingle) {
+          if (currentUser?.role === "admin" && e.originEvent) {
+            showMenu(e.originEvent.clientX, e.originEvent.clientY, "marker", p.id);
+          }
+        } else {
+          openDetail(p.id);
+        }
+      });
+      
+      marker.on('rightclick', (e) => {
+        if (currentUser?.role !== "admin") return;
+        if (e.originEvent) e.originEvent.stopPropagation();
+        selectedId = p.id;
+        if (e.originEvent) {
+          showMenu(e.originEvent.clientX, e.originEvent.clientY, "marker", p.id);
+        }
       });
 
       marker.setMap(map);
@@ -1623,6 +1669,7 @@
     resetForm();
     if (point) {
       pointName.value = point.name || "";
+      pointSubtitle.value = point.subtitle || "";
       pointDesc.value = point.desc || "";
       if (point.icon) {
         iconDataUrl = point.icon;
@@ -1681,6 +1728,16 @@
     selectedId = id; // 保存当前选中的点，给收藏、转发用
     
     detailName.textContent = p.name || "未命名地点";
+    const base = lastUserLngLat || [119.273151, 26.074554];
+    const dist = formatDistance(haversineKm(base, [p.lng, p.lat]));
+    if (dist) {
+      const subtitle = (p.subtitle || "").trim();
+      detailDistance.textContent = `距离 ${dist}${subtitle ? ` · ${subtitle}` : ""}`;
+      detailDistance.classList.remove("is-hidden");
+    } else {
+      detailDistance.classList.add("is-hidden");
+      detailDistance.textContent = "";
+    }
     detailDesc.textContent = p.desc || "暂无详情";
     
     // 更新收藏按钮状态
@@ -1956,6 +2013,7 @@
   pointForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = pointName.value.trim();
+    const subtitle = pointSubtitle.value.trim().slice(0, 5);
     const desc = pointDesc.value.trim();
     if (!name) return;
 
@@ -1965,6 +2023,7 @@
         return {
           ...p,
           name,
+          subtitle,
           desc,
           icon: iconDataUrl || p.icon || "",
           updatedAt: Date.now(),
@@ -1976,6 +2035,7 @@
         lng: pendingLngLat[0],
         lat: pendingLngLat[1],
         name,
+        subtitle,
         desc,
         icon: iconDataUrl,
         updatedAt: Date.now(),

@@ -1366,6 +1366,12 @@ body.is-detail-open #appHeader {
   font-size: 20px;
 }
 
+.detail-distance {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .detail-desc {
   margin-top: 10px;
   font-size: 14px;
