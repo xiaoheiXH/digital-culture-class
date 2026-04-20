@@ -178,11 +178,24 @@
       </section>
 
       <section class="page" id="page-memorial" data-page="memorial" aria-label="活动">
-        <div class="blank">空白页占位（活动）</div>
+        <div class="activity-page">
+          <div class="activity-top">
+            <div id="activityDateLabel" class="activity-date-label">日期</div>
+            <div id="activityDayRow" class="activity-day-row" aria-label="日期选择"></div>
+          </div>
+          <div id="activityList" class="activity-list"></div>
+          <button id="btnAddEvent" type="button" class="fab-add is-hidden" aria-label="发布活动">+</button>
+        </div>
       </section>
 
       <section class="page" id="page-discover" data-page="discover" aria-label="发现">
-        <div class="blank">空白页占位（发现）</div>
+        <div class="discover-page">
+          <div class="discover-header">
+            <h2 class="discover-title">推荐打卡点</h2>
+            <button id="btnDiscoverRefresh" type="button" class="btn btn-light btn-sm">换一换</button>
+          </div>
+          <div id="discoverList" class="discover-list"></div>
+        </div>
       </section>
 
       <section class="page" id="page-me" data-page="me" aria-label="我的">
@@ -269,6 +282,52 @@
       <button id="closeImageViewer" class="btn-close-viewer">×</button>
       <button id="downloadImageViewer" class="btn-download-viewer">保存图片</button>
       <img id="viewerImage" src="" alt="全屏查看" />
+    </div>
+    
+    <div id="eventDetailView" class="event-detail is-hidden" aria-hidden="true">
+      <button id="closeEventDetail" class="btn-close-viewer">×</button>
+      <div class="event-detail-body">
+        <img id="eventDetailImage" class="event-detail-image is-hidden" alt="活动配图" />
+        <div id="eventDetailImagePlaceholder" class="event-detail-image placeholder">配图</div>
+        <h2 id="eventDetailTitle" class="event-detail-title">活动标题</h2>
+        <div id="eventDetailContent" class="event-detail-content">活动公告</div>
+      </div>
+    </div>
+    
+    <div id="eventFormModal" class="overlay is-hidden" aria-hidden="true">
+      <div class="dialog" role="dialog" aria-modal="true" aria-label="发布活动">
+        <div class="dialog-header">
+          <h3>发布活动</h3>
+          <button id="closeEventForm" class="btn-close">×</button>
+        </div>
+        <div class="dialog-body">
+          <form id="eventForm" class="point-form">
+            <label class="field">
+              <span class="field-label">活动日期</span>
+              <input id="eventDateInput" type="date" />
+            </label>
+            <label class="field">
+              <span class="field-label">活动标题</span>
+              <input id="eventTitleInput" type="text" maxlength="60" placeholder="输入活动标题" />
+            </label>
+            <label class="field">
+              <span class="field-label">活动配图（可选）</span>
+              <input id="eventImageFile" type="file" accept="image/*" />
+            </label>
+            <div class="icon-preview-wrap">
+              <img id="eventImagePreview" class="icon-preview is-hidden" alt="配图预览" />
+            </div>
+            <label class="field">
+              <span class="field-label">活动内容</span>
+              <textarea id="eventContentInput" rows="6" maxlength="800" placeholder="输入活动公告内容"></textarea>
+            </label>
+            <div class="dialog-actions">
+              <button id="cancelEventForm" type="button" class="btn btn-light">取消</button>
+              <button type="submit" class="btn btn-primary">发布</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
     
     <div id="toast" class="toast is-hidden" aria-live="polite"></div>

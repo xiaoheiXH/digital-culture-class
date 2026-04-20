@@ -41,6 +41,27 @@
   const settingsModal = document.getElementById("settingsModal");
   const togglePerfMode = document.getElementById("togglePerfMode");
   const perfModeState = document.getElementById("perfModeState");
+  const activityDateLabel = document.getElementById("activityDateLabel");
+  const activityDayRow = document.getElementById("activityDayRow");
+  const activityList = document.getElementById("activityList");
+  const btnAddEvent = document.getElementById("btnAddEvent");
+  const eventDetailView = document.getElementById("eventDetailView");
+  const closeEventDetail = document.getElementById("closeEventDetail");
+  const eventDetailImage = document.getElementById("eventDetailImage");
+  const eventDetailImagePlaceholder = document.getElementById("eventDetailImagePlaceholder");
+  const eventDetailTitle = document.getElementById("eventDetailTitle");
+  const eventDetailContent = document.getElementById("eventDetailContent");
+  const eventFormModal = document.getElementById("eventFormModal");
+  const closeEventForm = document.getElementById("closeEventForm");
+  const cancelEventForm = document.getElementById("cancelEventForm");
+  const eventForm = document.getElementById("eventForm");
+  const eventDateInput = document.getElementById("eventDateInput");
+  const eventTitleInput = document.getElementById("eventTitleInput");
+  const eventImageFile = document.getElementById("eventImageFile");
+  const eventImagePreview = document.getElementById("eventImagePreview");
+  const eventContentInput = document.getElementById("eventContentInput");
+  const discoverList = document.getElementById("discoverList");
+  const btnDiscoverRefresh = document.getElementById("btnDiscoverRefresh");
   const imageViewer = document.getElementById("imageViewer");
   const viewerImage = document.getElementById("viewerImage");
   const closeImageViewer = document.getElementById("closeImageViewer");
@@ -72,6 +93,7 @@
   const USER_KEY = "campus_map_user";
   const USERS_DB_KEY = "campus_map_users_db"; // 本地用户数据库
   const PERF_MODE_KEY = "campus_map_perf_mode";
+  const EVENTS_KEY = "campus_map_events_v1";
 
   if (
     !mapContent ||
@@ -116,6 +138,27 @@
     !settingsModal ||
     !togglePerfMode ||
     !perfModeState ||
+    !activityDateLabel ||
+    !activityDayRow ||
+    !activityList ||
+    !btnAddEvent ||
+    !eventDetailView ||
+    !closeEventDetail ||
+    !eventDetailImage ||
+    !eventDetailImagePlaceholder ||
+    !eventDetailTitle ||
+    !eventDetailContent ||
+    !eventFormModal ||
+    !closeEventForm ||
+    !cancelEventForm ||
+    !eventForm ||
+    !eventDateInput ||
+    !eventTitleInput ||
+    !eventImageFile ||
+    !eventImagePreview ||
+    !eventContentInput ||
+    !discoverList ||
+    !btnDiscoverRefresh ||
     !imageViewer ||
     !viewerImage ||
     !closeImageViewer ||
@@ -158,6 +201,11 @@
   let isLoginMode = true;
   let toastTimer = null;
   let perfModeEnabled = localStorage.getItem(PERF_MODE_KEY) === "1";
+  let lastUserLngLat = null;
+  let events = [];
+  let selectedEventId = null;
+  let selectedActivityDate = "";
+  let eventImageDataUrl = "";
 
   const showToast = (message, type = "info", duration = 2200) => {
     if (!toast) return;
@@ -175,6 +223,18 @@
     perfModeState.textContent = perfModeEnabled ? "开" : "关";
     perfModeState.classList.toggle("is-on", perfModeEnabled);
   };
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const toDateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const parseDateKey = (s) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt;
+  };
+  const formatCNDate = (d) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  const getDowCN = (d) => "日一二三四五六"[d.getDay()];
 
   const applyPerfModeToMap = () => {
     if (!map) return;
@@ -338,6 +398,334 @@
       } catch {}
     }
   };
+
+  const loadEventsLocal = () => {
+    try {
+      const raw = localStorage.getItem(EVENTS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((e) => e && typeof e.id === "string");
+    } catch {
+      return [];
+    }
+  };
+
+  const saveEventsLocal = (list) => {
+    try {
+      localStorage.setItem(EVENTS_KEY, JSON.stringify(list));
+    } catch {}
+  };
+
+  const fetchEventsOnline = async () => {
+    try {
+      const res = await fetch("/api/events");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        events = data;
+        saveEventsLocal(events);
+      }
+    } catch {}
+  };
+
+  const saveEventsOnline = async (options = {}) => {
+    try {
+      saveEventsLocal(events);
+    } catch {}
+
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(events),
+      });
+      if (!res.ok) {
+        let message = `保存失败（${res.status}）`;
+        try {
+          const ct = res.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const err = await res.json();
+            message = err?.error || message;
+          } else {
+            const t = await res.text();
+            if (t) message = t;
+          }
+        } catch {}
+        throw new Error(message);
+      }
+      if (options.notice) showToast("✅ 活动发布成功", "success");
+      return true;
+    } catch (e) {
+      if (options.notice) showToast("❌ 活动发布失败：" + e.message, "error", 3000);
+      return false;
+    }
+  };
+
+  const ensureActivityDate = () => {
+    const today = new Date();
+    if (!selectedActivityDate) selectedActivityDate = toDateKey(today);
+  };
+
+  const openEventDetail = (eventId) => {
+    const ev = events.find((x) => x.id === eventId);
+    if (!ev) return;
+    selectedEventId = ev.id;
+    eventDetailTitle.textContent = ev.title || "活动标题";
+    eventDetailContent.textContent = ev.content || "活动公告";
+    if (ev.image) {
+      eventDetailImage.src = ev.image;
+      eventDetailImage.classList.remove("is-hidden");
+      eventDetailImagePlaceholder.classList.add("is-hidden");
+    } else {
+      eventDetailImage.classList.add("is-hidden");
+      eventDetailImage.removeAttribute("src");
+      eventDetailImagePlaceholder.classList.remove("is-hidden");
+    }
+    eventDetailView.classList.remove("is-hidden");
+    eventDetailView.setAttribute("aria-hidden", "false");
+    document.body.classList.add("is-event-open");
+  };
+
+  const closeEventDetailView = () => {
+    eventDetailView.classList.add("is-hidden");
+    eventDetailView.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("is-event-open");
+    selectedEventId = null;
+  };
+
+  closeEventDetail.addEventListener("click", closeEventDetailView);
+  eventDetailView.addEventListener("click", (e) => {
+    if (e.target === eventDetailView) closeEventDetailView();
+  });
+
+  const renderActivityDays = () => {
+    ensureActivityDate();
+    const selectedDate = parseDateKey(selectedActivityDate) || new Date();
+    const start = new Date(selectedDate);
+    start.setDate(start.getDate() - 7);
+
+    activityDayRow.innerHTML = "";
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const key = toDateKey(d);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "day-chip" + (key === selectedActivityDate ? " is-active" : "");
+      btn.innerHTML = `<div class="dow">${getDowCN(d)}</div><div class="dom">${d.getDate()}</div>`;
+      btn.addEventListener("click", () => {
+        selectedActivityDate = key;
+        renderActivityPage();
+      });
+      activityDayRow.appendChild(btn);
+    }
+
+    activityDateLabel.textContent = formatCNDate(selectedDate);
+  };
+
+  const renderActivityList = () => {
+    ensureActivityDate();
+    const list = events
+      .filter((e) => e && e.date === selectedActivityDate)
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
+    if (list.length === 0) {
+      activityList.innerHTML = `<div class="comment-placeholder">暂无活动（默认显示今日）</div>`;
+      return;
+    }
+
+    activityList.innerHTML = list
+      .map(
+        (e) => `
+      <div class="event-card" data-id="${e.id}">
+        <div class="event-cover">
+          ${e.image ? `<img src="${e.image}" alt="配图" />` : "配图"}
+        </div>
+        <div class="event-title">${e.title || "活动标题"}</div>
+      </div>
+    `
+      )
+      .join("");
+
+    activityList.querySelectorAll(".event-card").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = el.getAttribute("data-id");
+        if (id) openEventDetail(id);
+      });
+    });
+  };
+
+  const renderActivityPage = () => {
+    renderActivityDays();
+    renderActivityList();
+    if (currentUser?.role === "admin") {
+      btnAddEvent.classList.remove("is-hidden");
+    } else {
+      btnAddEvent.classList.add("is-hidden");
+    }
+  };
+
+  const resetEventForm = () => {
+    eventForm.reset();
+    eventImageDataUrl = "";
+    eventImagePreview.classList.add("is-hidden");
+    eventImagePreview.removeAttribute("src");
+  };
+
+  const openEventForm = () => {
+    if (currentUser?.role !== "admin") return;
+    ensureActivityDate();
+    resetEventForm();
+    eventDateInput.value = selectedActivityDate;
+    eventFormModal.classList.remove("is-hidden");
+    eventFormModal.setAttribute("aria-hidden", "false");
+  };
+
+  const closeEventFormModal = () => {
+    eventFormModal.classList.add("is-hidden");
+    eventFormModal.setAttribute("aria-hidden", "true");
+  };
+
+  btnAddEvent.addEventListener("click", openEventForm);
+  closeEventForm.addEventListener("click", closeEventFormModal);
+  cancelEventForm.addEventListener("click", closeEventFormModal);
+  eventFormModal.addEventListener("click", (e) => {
+    if (e.target === eventFormModal) closeEventFormModal();
+  });
+
+  eventImageFile.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const reader = new FileReader();
+      const raw = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.onerror = () => reject(new Error("读取文件失败"));
+        reader.readAsDataURL(file);
+      });
+      if (!raw) return;
+      const compressed = await shrinkImageDataUrl(raw, { maxSide: 960, maxChars: 360_000 });
+      eventImageDataUrl = compressed;
+      eventImagePreview.src = eventImageDataUrl;
+      eventImagePreview.classList.remove("is-hidden");
+    } catch {
+      showToast("配图处理失败", "error", 2600);
+    }
+  });
+
+  eventForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (currentUser?.role !== "admin") return;
+    const date = eventDateInput.value || selectedActivityDate;
+    const title = String(eventTitleInput.value || "").trim();
+    const content = String(eventContentInput.value || "").trim();
+    if (!date || !title) {
+      showToast("请填写活动日期与标题", "error", 2200);
+      return;
+    }
+
+    const now = Date.now();
+    events.push({
+      id: uuid(),
+      date,
+      title,
+      content,
+      image: eventImageDataUrl || "",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const ok = await saveEventsOnline({ notice: true });
+    if (ok) {
+      selectedActivityDate = date;
+      closeEventFormModal();
+      renderActivityPage();
+    }
+  });
+
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const haversineKm = (a, b) => {
+    const toRad = (x) => (x * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(b[1] - a[1]);
+    const dLng = toRad(b[0] - a[0]);
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+    const s =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  };
+
+  const formatDistance = (km) => {
+    if (!Number.isFinite(km)) return "";
+    if (km < 1) return `${Math.round(km * 1000)}m`;
+    return `${km.toFixed(1)}km`;
+  };
+
+  const renderDiscoverPage = () => {
+    const base = lastUserLngLat || [119.273151, 26.074554];
+    const list = shuffle(points).slice(0, 10);
+    if (!list.length) {
+      discoverList.innerHTML = `<div class="comment-placeholder">暂无推荐内容</div>`;
+      return;
+    }
+
+    discoverList.innerHTML = list
+      .map((p) => {
+        const img = (p.images && p.images[0]) || p.icon || "";
+        const dist = formatDistance(haversineKm(base, [p.lng, p.lat]));
+        const meta = dist ? `距离 ${dist}·热门打卡点` : "热门打卡点";
+        const name = p.name || "未命名地点";
+        const desc = (p.desc || "").replace(/\s+/g, " ").slice(0, 26);
+        return `
+          <div class="discover-item" data-id="${p.id}">
+            ${img ? `<img class="discover-thumb" src="${img}" alt="${name}" />` : `<div class="discover-thumb"></div>`}
+            <div class="discover-info">
+              <div class="discover-name">${name}</div>
+              <div class="discover-meta">${meta}${desc ? ` · ${desc}` : ""}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    discoverList.querySelectorAll(".discover-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const id = el.getAttribute("data-id");
+        if (!id) return;
+        const p = getPointById(id);
+        if (!p) return;
+        const ev = new CustomEvent("switch-tab", { detail: { tab: "map" } });
+        document.dispatchEvent(ev);
+        if (map) {
+          map.setCenter([p.lng, p.lat]);
+          map.setZoom(18);
+        }
+        openDetail(id);
+      });
+    });
+  };
+
+  btnDiscoverRefresh.addEventListener("click", renderDiscoverPage);
+
+  document.addEventListener("tab-changed", (e) => {
+    const tab = e.detail?.tab;
+    if (tab === "discover") {
+      renderDiscoverPage();
+    } else if (tab === "memorial") {
+      renderActivityPage();
+    }
+  });
 
   // 保存用户数据库
   const saveUsersDB = () => {
@@ -510,6 +898,11 @@
     syncCurrentUser(); // 确保加载最新本地数据库中的信息
     updateMePage();
     loginOverlay.classList.add("is-hidden");
+    events = loadEventsLocal();
+    ensureActivityDate();
+    fetchEventsOnline().then(() => {
+      renderActivityPage();
+    });
     if (window.AMap) {
       initMap();
     } else {
@@ -584,6 +977,7 @@
       
       // 检查是否是通过分享链接进入的
       checkSharedPoint();
+      renderDiscoverPage();
       
     } catch (error) {
       console.error('❌ 同步失败:', error);
@@ -792,6 +1186,11 @@
         showButton: false,        // 使用自定义按钮
       });
       map.addControl(geolocation);
+      geolocation.on('complete', (data) => {
+        if (data && data.position) {
+          lastUserLngLat = [data.position.lng, data.position.lat];
+        }
+      });
     });
 
     /** 
@@ -1619,6 +2018,8 @@
         appHeader.classList.remove("is-active");
       }
     }
+    
+    document.dispatchEvent(new CustomEvent("tab-changed", { detail: { tab: key } }));
   };
 
   tabs.forEach((btn) => {
