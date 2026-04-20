@@ -44,6 +44,7 @@
   const imageViewer = document.getElementById("imageViewer");
   const viewerImage = document.getElementById("viewerImage");
   const closeImageViewer = document.getElementById("closeImageViewer");
+  const downloadImageViewer = document.getElementById("downloadImageViewer");
   const toast = document.getElementById("toast");
 
   // 新增 DOM
@@ -118,6 +119,7 @@
     !imageViewer ||
     !viewerImage ||
     !closeImageViewer ||
+    !downloadImageViewer ||
     !toast ||
     !genericListModal ||
     !genericListTitle ||
@@ -273,6 +275,68 @@
       out.push(p);
     }
     return { points: out, changed };
+  };
+
+  const sanitizeFileName = (name) => {
+    const n = String(name || "").trim();
+    const safe = n.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
+    return safe || "image";
+  };
+
+  const guessExtFromMime = (mime) => {
+    if (!mime) return "png";
+    const m = String(mime).toLowerCase();
+    if (m.includes("webp")) return "webp";
+    if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
+    if (m.includes("png")) return "png";
+    if (m.includes("gif")) return "gif";
+    return "png";
+  };
+
+  const guessMimeFromDataUrl = (dataUrl) => {
+    const m = /^data:([^;]+);/i.exec(String(dataUrl || ""));
+    return m ? m[1] : "";
+  };
+
+  const downloadUrl = (url, filename) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const downloadImage = async (src, filenameBase) => {
+    if (!src) {
+      showToast("没有可保存的图片", "error", 2200);
+      return;
+    }
+
+    try {
+      if (isDataUrl(src)) {
+        const mime = guessMimeFromDataUrl(src);
+        const ext = guessExtFromMime(mime);
+        downloadUrl(src, `${sanitizeFileName(filenameBase)}.${ext}`);
+        showToast("✅ 已开始保存到本地", "success", 1600);
+        return;
+      }
+
+      const res = await fetch(src, { cache: "force-cache" });
+      if (!res.ok) throw new Error(`图片下载失败（${res.status}）`);
+      const blob = await res.blob();
+      const ext = guessExtFromMime(blob.type);
+      const objUrl = URL.createObjectURL(blob);
+      downloadUrl(objUrl, `${sanitizeFileName(filenameBase)}.${ext}`);
+      setTimeout(() => URL.revokeObjectURL(objUrl), 10_000);
+      showToast("✅ 已开始保存到本地", "success", 1600);
+    } catch (e) {
+      showToast("保存失败：可能被跨域限制", "error", 2600);
+      try {
+        window.open(src, "_blank");
+      } catch {}
+    }
   };
 
   // 保存用户数据库
@@ -920,6 +984,13 @@
   closeImageViewer.addEventListener("click", closeImageViewerModal);
   imageViewer.addEventListener("click", (e) => {
     if (e.target === imageViewer) closeImageViewerModal();
+  });
+  
+  downloadImageViewer.addEventListener("click", async () => {
+    const src = viewerImage.getAttribute("src") || "";
+    const p = selectedId ? getPointById(selectedId) : null;
+    const base = p ? `${p.name || p.id}-图片` : "图片";
+    await downloadImage(src, base);
   });
 
   // 渲染并打开详情页
