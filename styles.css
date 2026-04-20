@@ -931,6 +931,7 @@ body {
   overflow-y: auto;
   flex: 1;
   scrollbar-width: thin;
+  background: #f8fafc;
 }
 
 .event-detail-body::-webkit-scrollbar {
@@ -963,21 +964,58 @@ body {
 }
 
 .event-detail-title {
-  margin: 18px 0 10px;
-  font-size: 32px;
-  font-weight: 900;
-  text-align: center;
+  margin: 16px 0 8px;
+  font-size: 22px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.event-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.event-date {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.event-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.event-like-btn.is-liked {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.event-like-btn:active {
+  transform: scale(0.98);
 }
 
 .event-detail-content {
   margin-top: 10px;
-  background: #e5e7eb;
+  background: #fff;
   border-radius: 14px;
   padding: 18px 14px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.7;
   white-space: pre-wrap;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.06);
 }
 
 .scroll-indicator {

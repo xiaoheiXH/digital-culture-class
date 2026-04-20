@@ -58,6 +58,9 @@
   const eventDetailImage = document.getElementById("eventDetailImage");
   const eventDetailImagePlaceholder = document.getElementById("eventDetailImagePlaceholder");
   const eventDetailTitle = document.getElementById("eventDetailTitle");
+  const eventDetailDate = document.getElementById("eventDetailDate");
+  const eventLikeBtn = document.getElementById("eventLikeBtn");
+  const eventLikeCount = document.getElementById("eventLikeCount");
   const eventDetailContent = document.getElementById("eventDetailContent");
   const eventScrollIndicator = document.getElementById("eventScrollIndicator");
   const eventScrollThumb = document.getElementById("eventScrollThumb");
@@ -165,6 +168,9 @@
     !eventDetailImage ||
     !eventDetailImagePlaceholder ||
     !eventDetailTitle ||
+    !eventDetailDate ||
+    !eventLikeBtn ||
+    !eventLikeCount ||
     !eventDetailContent ||
     !eventScrollIndicator ||
     !eventScrollThumb ||
@@ -491,6 +497,21 @@
     if (!selectedActivityMonth) selectedActivityMonth = toMonthKey(d);
   };
 
+  const getEventById = (id) => events.find((e) => e && e.id === id) || null;
+
+  const updateEventLikeBtnState = (ev) => {
+    const likes = ev?.likes || [];
+    eventLikeCount.textContent = String(likes.length);
+    const uid = getCurrentUserId();
+    if (likes.includes(uid)) {
+      eventLikeBtn.classList.add("is-liked");
+      eventLikeBtn.querySelector(".like-text").textContent = "已赞";
+    } else {
+      eventLikeBtn.classList.remove("is-liked");
+      eventLikeBtn.querySelector(".like-text").textContent = "点赞";
+    }
+  };
+
   const clampDateToMonth = (d, monthKey) => {
     const base = new Date(d);
     const m = /^(\d{4})-(\d{2})$/.exec(String(monthKey || ""));
@@ -573,11 +594,13 @@
   };
 
   const openEventDetail = (eventId) => {
-    const ev = events.find((x) => x.id === eventId);
+    const ev = getEventById(eventId);
     if (!ev) return;
     selectedEventId = ev.id;
     eventDetailTitle.textContent = ev.title || "活动标题";
     eventDetailContent.textContent = ev.content || "活动公告";
+    const d = parseDateKey(ev.date);
+    eventDetailDate.textContent = d ? formatCNDate(d) : (ev.date || "");
     if (ev.image) {
       eventDetailImage.src = ev.image;
       eventDetailImage.classList.remove("is-hidden");
@@ -591,6 +614,7 @@
       eventDetailImage.style.cursor = "";
       eventDetailImage.onclick = null;
     }
+    updateEventLikeBtnState(ev);
     if (currentUser?.role === "admin") {
       deleteEvent.classList.remove("is-hidden");
     } else {
@@ -644,7 +668,7 @@
   deleteEvent.addEventListener("click", async () => {
     if (currentUser?.role !== "admin") return;
     if (!selectedEventId) return;
-    const ev = events.find((x) => x.id === selectedEventId);
+    const ev = getEventById(selectedEventId);
     const ok = window.confirm(`确认删除活动「${ev?.title || "未命名活动"}」？`);
     if (!ok) return;
     events = events.filter((x) => x.id !== selectedEventId);
@@ -653,6 +677,22 @@
       closeEventDetailView();
       renderActivityPage();
     }
+  });
+
+  eventLikeBtn.addEventListener("click", async () => {
+    if (!selectedEventId) return;
+    const ev = getEventById(selectedEventId);
+    if (!ev) return;
+    if (!ev.likes) ev.likes = [];
+    const uid = getCurrentUserId();
+    const idx = ev.likes.indexOf(uid);
+    if (idx > -1) {
+      ev.likes.splice(idx, 1);
+    } else {
+      ev.likes.push(uid);
+    }
+    updateEventLikeBtnState(ev);
+    await saveEventsOnline();
   });
 
   let activitySwipeStartX = null;
@@ -1126,6 +1166,21 @@
     loginOverlay.classList.add("is-hidden");
     events = loadEventsLocal();
     ensureActivityDate();
+    if (events.length === 0) {
+      events = [
+        {
+          id: "sample-20260420",
+          date: "2026-04-20",
+          title: "活动标题",
+          content: "活动公告",
+          image: "",
+          likes: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+      saveEventsLocal(events);
+    }
     fetchEventsOnline().then(() => {
       renderActivityPage();
     });
