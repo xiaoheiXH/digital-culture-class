@@ -437,10 +437,10 @@
     campusOverlayCanvasWrap = document.createElement("div");
     campusOverlayCanvasWrap.style.position = "absolute";
     campusOverlayCanvasWrap.style.inset = "0";
-    campusOverlayCanvasWrap.style.zIndex = "0";
+    campusOverlayCanvasWrap.style.zIndex = "10";
     campusOverlayCanvasWrap.style.pointerEvents = "none";
     campusOverlayCanvasWrap.style.overflow = "hidden";
-    container.insertBefore(campusOverlayCanvasWrap, container.firstChild);
+    container.appendChild(campusOverlayCanvasWrap);
 
     campusOverlayCanvas = document.createElement("canvas");
     campusOverlayCanvas.style.width = "100%";
@@ -585,7 +585,7 @@
       bounds: new AMap.Bounds([c.west, c.south], [c.east, c.north]),
       zooms: [3, 20],
       opacity: c.opacity,
-      zIndex: 1,
+      zIndex: 10,
       visible: true,
     });
     if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(map);
