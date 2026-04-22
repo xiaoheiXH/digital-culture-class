@@ -307,7 +307,7 @@
   let selectedActivityMonth = "";
   let eventImageDataUrl = "";
   let campusImageLayer = null;
-  let campusOverlayCanvasWrap = null;
+  let campusOverlayCustomLayer = null;
   let campusOverlayCanvas = null;
   let campusOverlayCanvasCtx = null;
   let campusOverlayImage = null;
@@ -432,31 +432,31 @@
 
   const ensureCampusOverlayCanvas = () => {
     if (!map) return;
-    if (campusOverlayCanvasWrap && campusOverlayCanvas && campusOverlayCanvasCtx) return;
-    const container = map.getContainer();
-    campusOverlayCanvasWrap = document.createElement("div");
-    campusOverlayCanvasWrap.style.position = "absolute";
-    campusOverlayCanvasWrap.style.inset = "0";
-    campusOverlayCanvasWrap.style.zIndex = "10";
-    campusOverlayCanvasWrap.style.pointerEvents = "none";
-    campusOverlayCanvasWrap.style.overflow = "hidden";
-    container.appendChild(campusOverlayCanvasWrap);
-
+    if (campusOverlayCustomLayer && campusOverlayCanvas && campusOverlayCanvasCtx) return;
     campusOverlayCanvas = document.createElement("canvas");
     campusOverlayCanvas.style.width = "100%";
     campusOverlayCanvas.style.height = "100%";
-    campusOverlayCanvasWrap.appendChild(campusOverlayCanvas);
-
+    campusOverlayCanvas.style.pointerEvents = "none";
     campusOverlayCanvasCtx = campusOverlayCanvas.getContext("2d");
+
+    campusOverlayCustomLayer = new AMap.CustomLayer(campusOverlayCanvas, {
+      zIndex: 10,
+      zooms: [3, 20],
+    });
+    campusOverlayCustomLayer.render = () => {
+      if (!overlayVisible) return;
+      if (!isCanvasOverlayMode(overlayConfig)) return;
+      renderCampusOverlayCanvas(overlayConfig);
+    };
+    campusOverlayCustomLayer.setMap(map);
   };
 
   const updateCampusOverlayCanvasSize = () => {
     if (!map || !campusOverlayCanvas || !campusOverlayCanvasCtx) return;
-    const container = map.getContainer();
-    const rect = container.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round(rect.width));
-    const h = Math.max(1, Math.round(rect.height));
+    const size = map.getSize();
+    const w = Math.max(1, Math.round(size.width));
+    const h = Math.max(1, Math.round(size.height));
     campusOverlayCanvas.width = Math.round(w * dpr);
     campusOverlayCanvas.height = Math.round(h * dpr);
     campusOverlayCanvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -486,9 +486,8 @@
     const c = sanitizeOverlayConfig(cfg);
     updateCampusOverlayCanvasSize();
     const ctx = campusOverlayCanvasCtx;
-    const container = map.getContainer();
-    const rect = container.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    const size = map.getSize();
+    ctx.clearRect(0, 0, size.width, size.height);
     if (!campusOverlayImage) return;
 
     const sw = map.lngLatToContainer(new AMap.LngLat(c.west, c.south));
@@ -526,12 +525,12 @@
   };
 
   const teardownCampusOverlayCanvas = () => {
-    if (campusOverlayCanvasWrap) {
+    if (campusOverlayCustomLayer) {
       try {
-        campusOverlayCanvasWrap.remove();
+        campusOverlayCustomLayer.setMap(null);
       } catch {}
     }
-    campusOverlayCanvasWrap = null;
+    campusOverlayCustomLayer = null;
     campusOverlayCanvas = null;
     campusOverlayCanvasCtx = null;
     campusOverlayImage = null;
@@ -2075,7 +2074,7 @@
         position: [p.lng, p.lat],
         content: markerContent,
         offset: new AMap.Pixel(-10, -10),
-        zIndex: 100,
+        zIndex: 10000,
         extData: { id: p.id }
       });
 
