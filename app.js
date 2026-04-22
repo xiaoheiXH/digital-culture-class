@@ -1419,7 +1419,7 @@
     map = new AMap.Map('mapContent', {
       zoom: 16.5, // 调整为接近参考图的比例尺
       center: ZC_CENTER,
-      viewMode: perfModeEnabled ? '2D' : '3D',
+      viewMode: '2D',
       animateEnable: !perfModeEnabled,
       zooms: perfModeEnabled ? [15, 19] : [3, 20],
     });
@@ -1505,17 +1505,29 @@
      * 1. 叠加校园建筑描绘图 (GroundImage/ImageLayer)
      * 将您的手绘图或建筑描绘图放置在 ./assets/campus-map.png (示例路径)
      */
-    const campusImageLayer = new AMap.ImageLayer({
-      url: 'https://a.amap.com/jsapi_demos/static/demo-center/bg/map_shanghai.png', // 示例图
-      bounds: new AMap.Bounds(
-        [119.268000, 26.068000], // 西南角
-        [119.278000, 26.078000]  // 东北角
-      ),
-      zooms: [15, 20],
-      opacity: 0, // [修改] 暂时设为 0（透明），等您准备好图片后再调回 0.85 左右
-      visible: false // [修改] 也可以直接设为不可见，功能代码依然保留
-    });
-    map.add(campusImageLayer);
+    const canLoadCampusOverlay = location.protocol === "http:" || location.protocol === "https:";
+    if (canLoadCampusOverlay) {
+      const campusImageLayer = new AMap.ImageLayer({
+        url: new URL("./svg/mapfrits.png", window.location.href).toString(),
+        bounds: new AMap.Bounds(
+          [119.268000, 26.068000], // 西南角
+          [119.278000, 26.078000] // 东北角
+        ),
+        zooms: [3, 20],
+        opacity: 0.95,
+        zIndex: 5,
+        visible: true
+      });
+      if (typeof campusImageLayer.setMap === "function") {
+        campusImageLayer.setMap(map);
+      } else {
+        map.add(campusImageLayer);
+      }
+    } else {
+      if (typeof showToast === "function") {
+        showToast("本地 file:// 打开会拦截底图图片（CORS）。请用本地服务器或线上链接打开。", "error", 3500);
+      }
+    }
 
     /**
      * 2. 绘制建筑轮廓 (Polygon)
@@ -1533,7 +1545,7 @@
       const polygon = new AMap.Polygon({
         path: libraryPath,
         fillColor: '#00b2ff',
-        fillOpacity: 0.1,     // [修改] 调低填充透明度，让它不遮挡底层地图
+        fillOpacity: 0.05,
         strokeColor: '#00b2ff',
         strokeWeight: 1,      // [修改] 调细边框
         strokeStyle: 'dashed', // [修改] 使用虚线，表示这只是一个逻辑区域
@@ -1546,16 +1558,15 @@
 
       // 鼠标移入效果
       polygon.on('mouseover', () => {
-        polygon.setOptions({ fillOpacity: 0.5 });
+        polygon.setOptions({ fillOpacity: 0.12 });
       });
       polygon.on('mouseout', () => {
-        polygon.setOptions({ fillOpacity: 0.2 });
+        polygon.setOptions({ fillOpacity: 0.05 });
       });
 
       map.add(polygon);
     };
 
-    renderBuildingOutlines();
     renderPoints();
   };
 
@@ -1586,6 +1597,7 @@
         position: [p.lng, p.lat],
         content: markerContent,
         offset: new AMap.Pixel(-10, -10),
+        zIndex: 100,
         extData: { id: p.id }
       });
 
