@@ -34,6 +34,7 @@
   const overlaySouth = document.getElementById("overlaySouth");
   const overlayEast = document.getElementById("overlayEast");
   const overlayNorth = document.getElementById("overlayNorth");
+  const overlayRotate = document.getElementById("overlayRotate");
   const overlayStep = document.getElementById("overlayStep");
   const overlayMoveUp = document.getElementById("overlayMoveUp");
   const overlayMoveDown = document.getElementById("overlayMoveDown");
@@ -41,6 +42,10 @@
   const overlayMoveRight = document.getElementById("overlayMoveRight");
   const overlayScaleUp = document.getElementById("overlayScaleUp");
   const overlayScaleDown = document.getElementById("overlayScaleDown");
+  const overlayRotateLeft = document.getElementById("overlayRotateLeft");
+  const overlayRotateRight = document.getElementById("overlayRotateRight");
+  const overlayStretchYUp = document.getElementById("overlayStretchYUp");
+  const overlayStretchYDown = document.getElementById("overlayStretchYDown");
   const resetOverlayAdjust = document.getElementById("resetOverlayAdjust");
   const saveOverlayAdjust = document.getElementById("saveOverlayAdjust");
   const searchInput = document.getElementById("searchInput");
@@ -140,6 +145,7 @@
     east: 119.278,
     north: 26.078,
     opacity: 0.95,
+    rotationDeg: 0,
   };
 
   if (
@@ -178,6 +184,7 @@
     !overlaySouth ||
     !overlayEast ||
     !overlayNorth ||
+    !overlayRotate ||
     !overlayStep ||
     !overlayMoveUp ||
     !overlayMoveDown ||
@@ -185,6 +192,10 @@
     !overlayMoveRight ||
     !overlayScaleUp ||
     !overlayScaleDown ||
+    !overlayRotateLeft ||
+    !overlayRotateRight ||
+    !overlayStretchYUp ||
+    !overlayStretchYDown ||
     !resetOverlayAdjust ||
     !saveOverlayAdjust ||
     !searchInput ||
@@ -292,15 +303,38 @@
   let selectedActivityMonth = "";
   let eventImageDataUrl = "";
   let campusImageLayer = null;
+  let campusOverlayCanvasWrap = null;
+  let campusOverlayCanvas = null;
+  let campusOverlayCanvasCtx = null;
+  let campusOverlayImage = null;
+  let campusOverlayImageUrl = "";
+  let overlayCanvasEventsBound = false;
 
   const sanitizeOverlayConfig = (raw) => {
     if (!raw || typeof raw !== "object") return { ...DEFAULT_OVERLAY_CONFIG };
-    const url = typeof raw.url === "string" && raw.url.trim() ? raw.url.trim() : DEFAULT_OVERLAY_CONFIG.url;
-    const west = Number(raw.west);
-    const south = Number(raw.south);
-    const east = Number(raw.east);
-    const north = Number(raw.north);
+    const urlRaw = raw.url ?? raw.imageUrl ?? raw.imageURL;
+    const url = typeof urlRaw === "string" && urlRaw.trim() ? urlRaw.trim() : DEFAULT_OVERLAY_CONFIG.url;
+    let west = Number(raw.west);
+    let south = Number(raw.south);
+    let east = Number(raw.east);
+    let north = Number(raw.north);
+    if (
+      (!Number.isFinite(west) || !Number.isFinite(south) || !Number.isFinite(east) || !Number.isFinite(north)) &&
+      Array.isArray(raw.bounds) &&
+      raw.bounds.length === 2 &&
+      Array.isArray(raw.bounds[0]) &&
+      Array.isArray(raw.bounds[1]) &&
+      raw.bounds[0].length >= 2 &&
+      raw.bounds[1].length >= 2
+    ) {
+      west = Number(raw.bounds[0][0]);
+      south = Number(raw.bounds[0][1]);
+      east = Number(raw.bounds[1][0]);
+      north = Number(raw.bounds[1][1]);
+    }
     const opacity = Number(raw.opacity);
+    const rotationDegRaw = raw.rotationDeg ?? raw.rotateDeg ?? raw.rotation ?? raw.rotate;
+    const rotationDeg = Number(rotationDegRaw);
 
     const cfg = {
       url,
@@ -309,6 +343,7 @@
       east: Number.isFinite(east) ? east : DEFAULT_OVERLAY_CONFIG.east,
       north: Number.isFinite(north) ? north : DEFAULT_OVERLAY_CONFIG.north,
       opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_OVERLAY_CONFIG.opacity,
+      rotationDeg: Number.isFinite(rotationDeg) ? rotationDeg : DEFAULT_OVERLAY_CONFIG.rotationDeg,
     };
 
     if (cfg.east <= cfg.west) cfg.east = cfg.west + 0.0001;
@@ -368,6 +403,7 @@
     overlaySouth.value = String(c.south);
     overlayEast.value = String(c.east);
     overlayNorth.value = String(c.north);
+    overlayRotate.value = String(c.rotationDeg);
   };
 
   const readOverlayAdjustInputs = () => {
@@ -377,6 +413,7 @@
       south: Number(overlaySouth.value),
       east: Number(overlayEast.value),
       north: Number(overlayNorth.value),
+      rotationDeg: Number(overlayRotate.value),
       opacity: overlayConfig?.opacity ?? DEFAULT_OVERLAY_CONFIG.opacity,
     });
   };
@@ -389,13 +426,123 @@
 
   const canLoadCampusOverlay = () => location.protocol === "http:" || location.protocol === "https:";
 
+  const ensureCampusOverlayCanvas = () => {
+    if (!map) return;
+    if (campusOverlayCanvasWrap && campusOverlayCanvas && campusOverlayCanvasCtx) return;
+    const container = map.getContainer();
+    campusOverlayCanvasWrap = document.createElement("div");
+    campusOverlayCanvasWrap.style.position = "absolute";
+    campusOverlayCanvasWrap.style.inset = "0";
+    campusOverlayCanvasWrap.style.zIndex = "2";
+    campusOverlayCanvasWrap.style.pointerEvents = "none";
+    campusOverlayCanvasWrap.style.overflow = "hidden";
+    container.appendChild(campusOverlayCanvasWrap);
+
+    campusOverlayCanvas = document.createElement("canvas");
+    campusOverlayCanvas.style.width = "100%";
+    campusOverlayCanvas.style.height = "100%";
+    campusOverlayCanvasWrap.appendChild(campusOverlayCanvas);
+
+    campusOverlayCanvasCtx = campusOverlayCanvas.getContext("2d");
+  };
+
+  const updateCampusOverlayCanvasSize = () => {
+    if (!map || !campusOverlayCanvas || !campusOverlayCanvasCtx) return;
+    const container = map.getContainer();
+    const rect = container.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    campusOverlayCanvas.width = Math.round(w * dpr);
+    campusOverlayCanvas.height = Math.round(h * dpr);
+    campusOverlayCanvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    campusOverlayCanvasCtx.imageSmoothingEnabled = true;
+  };
+
+  const loadCampusOverlayImage = (absUrl) => {
+    if (!absUrl) return;
+    if (campusOverlayImage && campusOverlayImageUrl === absUrl && campusOverlayImage.complete) return;
+    campusOverlayImageUrl = absUrl;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      campusOverlayImage = img;
+      renderCampusOverlayCanvas(overlayConfig);
+    };
+    img.onerror = () => {
+      campusOverlayImage = null;
+    };
+    img.src = absUrl;
+  };
+
+  const isCanvasOverlayMode = (cfg) => Math.abs(Number(cfg?.rotationDeg || 0)) > 1e-6;
+
+  const renderCampusOverlayCanvas = (cfg) => {
+    if (!map || !campusOverlayCanvasCtx || !campusOverlayCanvas) return;
+    const c = sanitizeOverlayConfig(cfg);
+    updateCampusOverlayCanvasSize();
+    const ctx = campusOverlayCanvasCtx;
+    const container = map.getContainer();
+    const rect = container.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    if (!campusOverlayImage) return;
+
+    const sw = map.lngLatToContainer(new AMap.LngLat(c.west, c.south));
+    const ne = map.lngLatToContainer(new AMap.LngLat(c.east, c.north));
+    if (!sw || !ne) return;
+
+    const left = Math.min(sw.x, ne.x);
+    const top = Math.min(sw.y, ne.y);
+    const width = Math.abs(ne.x - sw.x);
+    const height = Math.abs(ne.y - sw.y);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return;
+
+    const cx = left + width / 2;
+    const cy = top + height / 2;
+    const rad = (c.rotationDeg * Math.PI) / 180;
+    ctx.save();
+    ctx.globalAlpha = c.opacity;
+    ctx.translate(cx, cy);
+    ctx.rotate(rad);
+    ctx.drawImage(campusOverlayImage, -width / 2, -height / 2, width, height);
+    ctx.restore();
+  };
+
+  const bindOverlayCanvasEvents = () => {
+    if (!map || overlayCanvasEventsBound) return;
+    overlayCanvasEventsBound = true;
+    const rerender = () => {
+      if (!overlayVisible) return;
+      if (!isCanvasOverlayMode(overlayConfig)) return;
+      renderCampusOverlayCanvas(overlayConfig);
+    };
+    map.on("mapmove", rerender);
+    map.on("zoomend", rerender);
+    map.on("resize", rerender);
+  };
+
+  const teardownCampusOverlayCanvas = () => {
+    if (campusOverlayCanvasWrap) {
+      try {
+        campusOverlayCanvasWrap.remove();
+      } catch {}
+    }
+    campusOverlayCanvasWrap = null;
+    campusOverlayCanvas = null;
+    campusOverlayCanvasCtx = null;
+    campusOverlayImage = null;
+    campusOverlayImageUrl = "";
+  };
+
   const removeCampusOverlay = () => {
-    if (!campusImageLayer) return;
-    try {
-      if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(null);
-      else if (map && typeof map.remove === "function") map.remove(campusImageLayer);
-    } catch {}
-    campusImageLayer = null;
+    if (campusImageLayer) {
+      try {
+        if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(null);
+        else if (map && typeof map.remove === "function") map.remove(campusImageLayer);
+      } catch {}
+      campusImageLayer = null;
+    }
+    teardownCampusOverlayCanvas();
   };
 
   const applyCampusOverlay = (cfg) => {
@@ -406,7 +553,29 @@
       return;
     }
     const c = sanitizeOverlayConfig(cfg);
-    removeCampusOverlay();
+    if (isCanvasOverlayMode(c)) {
+      if (campusImageLayer) {
+        try {
+          if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(null);
+          else if (map && typeof map.remove === "function") map.remove(campusImageLayer);
+        } catch {}
+        campusImageLayer = null;
+      }
+      ensureCampusOverlayCanvas();
+      bindOverlayCanvasEvents();
+      loadCampusOverlayImage(new URL(c.url, window.location.href).toString());
+      renderCampusOverlayCanvas(c);
+      return;
+    }
+
+    teardownCampusOverlayCanvas();
+    if (campusImageLayer) {
+      try {
+        if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(null);
+        else if (map && typeof map.remove === "function") map.remove(campusImageLayer);
+      } catch {}
+      campusImageLayer = null;
+    }
     campusImageLayer = new AMap.ImageLayer({
       url: new URL(c.url, window.location.href).toString(),
       bounds: new AMap.Bounds([c.west, c.south], [c.east, c.north]),
@@ -460,6 +629,28 @@
       east: cx + nextW / 2,
       south: cy - nextH / 2,
       north: cy + nextH / 2,
+    };
+    setOverlayAdjustInputs(next);
+    applyCampusOverlay(next);
+  };
+
+  const stretchOverlayY = (dir) => {
+    const step = readOverlayStep();
+    const c = readOverlayAdjustInputs();
+    const next = {
+      ...c,
+      south: c.south - dir * step,
+      north: c.north + dir * step,
+    };
+    setOverlayAdjustInputs(next);
+    applyCampusOverlay(next);
+  };
+
+  const rotateOverlay = (deltaDeg) => {
+    const c = readOverlayAdjustInputs();
+    const next = {
+      ...c,
+      rotationDeg: Number(c.rotationDeg) + deltaDeg,
     };
     setOverlayAdjustInputs(next);
     applyCampusOverlay(next);
@@ -1441,9 +1632,16 @@
   overlayMoveRight.addEventListener("click", () => nudgeOverlay(1, 0));
   overlayScaleUp.addEventListener("click", () => scaleOverlay(0.02));
   overlayScaleDown.addEventListener("click", () => scaleOverlay(-0.02));
+  overlayRotateLeft.addEventListener("click", () => rotateOverlay(-0.5));
+  overlayRotateRight.addEventListener("click", () => rotateOverlay(0.5));
+  overlayStretchYUp.addEventListener("click", () => stretchOverlayY(1));
+  overlayStretchYDown.addEventListener("click", () => stretchOverlayY(-1));
   resetOverlayAdjust.addEventListener("click", () => {
     setOverlayAdjustInputs(DEFAULT_OVERLAY_CONFIG);
     applyCampusOverlay(DEFAULT_OVERLAY_CONFIG);
+  });
+  [overlayWest, overlaySouth, overlayEast, overlayNorth, overlayRotate].forEach((el) => {
+    el.addEventListener("change", () => applyCampusOverlay(readOverlayAdjustInputs()));
   });
   saveOverlayAdjust.addEventListener("click", async () => {
     if (currentUser?.role !== "admin") return;
