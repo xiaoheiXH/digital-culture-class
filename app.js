@@ -312,7 +312,7 @@
   let campusOverlayCanvasCtx = null;
   let campusOverlayImage = null;
   let campusOverlayImageUrl = "";
-  let overlayCanvasEventsBound = false;
+  let overlayCanvasDpr = 1;
 
   const sanitizeOverlayConfig = (raw) => {
     if (!raw || typeof raw !== "object") return { ...DEFAULT_OVERLAY_CONFIG };
@@ -454,6 +454,7 @@
   const updateCampusOverlayCanvasSize = () => {
     if (!map || !campusOverlayCanvas || !campusOverlayCanvasCtx) return;
     const dpr = Math.max(1, window.devicePixelRatio || 1);
+    overlayCanvasDpr = dpr;
     const size = map.getSize();
     const w = Math.max(1, Math.round(size.width));
     const h = Math.max(1, Math.round(size.height));
@@ -500,28 +501,18 @@
     const height = Math.abs(ne.y - sw.y);
     if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return;
 
-    const cx = left + width / 2;
-    const cy = top + height / 2;
+    const snap = (v) => Math.round(v * overlayCanvasDpr) / overlayCanvasDpr;
+    const cx = snap(left + width / 2);
+    const cy = snap(top + height / 2);
+    const drawW = snap(width);
+    const drawH = snap(height);
     const rad = (c.rotationDeg * Math.PI) / 180;
     ctx.save();
     ctx.globalAlpha = c.opacity;
     ctx.translate(cx, cy);
     ctx.rotate(rad);
-    ctx.drawImage(campusOverlayImage, -width / 2, -height / 2, width, height);
+    ctx.drawImage(campusOverlayImage, -drawW / 2, -drawH / 2, drawW, drawH);
     ctx.restore();
-  };
-
-  const bindOverlayCanvasEvents = () => {
-    if (!map || overlayCanvasEventsBound) return;
-    overlayCanvasEventsBound = true;
-    const rerender = () => {
-      if (!overlayVisible) return;
-      if (!isCanvasOverlayMode(overlayConfig)) return;
-      renderCampusOverlayCanvas(overlayConfig);
-    };
-    map.on("mapmove", rerender);
-    map.on("zoomend", rerender);
-    map.on("resize", rerender);
   };
 
   const teardownCampusOverlayCanvas = () => {
@@ -565,7 +556,6 @@
         campusImageLayer = null;
       }
       ensureCampusOverlayCanvas();
-      bindOverlayCanvasEvents();
       loadCampusOverlayImage(new URL(c.url, window.location.href).toString());
       renderCampusOverlayCanvas(c);
       return;
