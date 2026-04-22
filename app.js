@@ -46,6 +46,8 @@
   const overlayRotateRight = document.getElementById("overlayRotateRight");
   const overlayStretchYUp = document.getElementById("overlayStretchYUp");
   const overlayStretchYDown = document.getElementById("overlayStretchYDown");
+  const overlayStretchXUp = document.getElementById("overlayStretchXUp");
+  const overlayStretchXDown = document.getElementById("overlayStretchXDown");
   const resetOverlayAdjust = document.getElementById("resetOverlayAdjust");
   const saveOverlayAdjust = document.getElementById("saveOverlayAdjust");
   const searchInput = document.getElementById("searchInput");
@@ -196,6 +198,8 @@
     !overlayRotateRight ||
     !overlayStretchYUp ||
     !overlayStretchYDown ||
+    !overlayStretchXUp ||
+    !overlayStretchXDown ||
     !resetOverlayAdjust ||
     !saveOverlayAdjust ||
     !searchInput ||
@@ -433,10 +437,10 @@
     campusOverlayCanvasWrap = document.createElement("div");
     campusOverlayCanvasWrap.style.position = "absolute";
     campusOverlayCanvasWrap.style.inset = "0";
-    campusOverlayCanvasWrap.style.zIndex = "2";
+    campusOverlayCanvasWrap.style.zIndex = "0";
     campusOverlayCanvasWrap.style.pointerEvents = "none";
     campusOverlayCanvasWrap.style.overflow = "hidden";
-    container.appendChild(campusOverlayCanvasWrap);
+    container.insertBefore(campusOverlayCanvasWrap, container.firstChild);
 
     campusOverlayCanvas = document.createElement("canvas");
     campusOverlayCanvas.style.width = "100%";
@@ -581,7 +585,7 @@
       bounds: new AMap.Bounds([c.west, c.south], [c.east, c.north]),
       zooms: [3, 20],
       opacity: c.opacity,
-      zIndex: 5,
+      zIndex: 1,
       visible: true,
     });
     if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(map);
@@ -641,6 +645,18 @@
       ...c,
       south: c.south - dir * step,
       north: c.north + dir * step,
+    };
+    setOverlayAdjustInputs(next);
+    applyCampusOverlay(next);
+  };
+
+  const stretchOverlayX = (dir) => {
+    const step = readOverlayStep();
+    const c = readOverlayAdjustInputs();
+    const next = {
+      ...c,
+      west: c.west - dir * step,
+      east: c.east + dir * step,
     };
     setOverlayAdjustInputs(next);
     applyCampusOverlay(next);
@@ -1636,6 +1652,8 @@
   overlayRotateRight.addEventListener("click", () => rotateOverlay(0.5));
   overlayStretchYUp.addEventListener("click", () => stretchOverlayY(1));
   overlayStretchYDown.addEventListener("click", () => stretchOverlayY(-1));
+  overlayStretchXUp.addEventListener("click", () => stretchOverlayX(1));
+  overlayStretchXDown.addEventListener("click", () => stretchOverlayX(-1));
   resetOverlayAdjust.addEventListener("click", () => {
     setOverlayAdjustInputs(DEFAULT_OVERLAY_CONFIG);
     applyCampusOverlay(DEFAULT_OVERLAY_CONFIG);
