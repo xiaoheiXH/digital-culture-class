@@ -1101,6 +1101,24 @@ body.is-event-open #appHeader {
   bottom: 80px; /* 避开底部菜单 */
 }
 
+.overlay-adjust-btn {
+  right: 16px;
+  bottom: 132px;
+}
+
+.overlay-adjust-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.overlay-adjust-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 /* AMap 自定义标记样式 */
 .map-marker-v2 {
   position: relative;

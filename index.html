@@ -70,6 +70,12 @@
               <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
             </svg>
           </button>
+          <button id="overlayAdjustBtn" class="map-ctrl-btn overlay-adjust-btn is-hidden" title="底图调整">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 7h18M3 17h18" />
+              <path d="M7 3v18M17 3v18" />
+            </svg>
+          </button>
         </div>
 
         <div id="mapMenu" class="map-menu is-hidden" role="menu" aria-label="地图操作菜单">
@@ -111,6 +117,51 @@
                 <button type="submit" class="btn btn-primary">保存</button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <div id="overlayAdjustModal" class="overlay is-hidden" aria-hidden="true">
+          <div class="dialog" role="dialog" aria-modal="true" aria-label="底图调整">
+            <div class="dialog-header">
+              <h3>底图调整（管理员）</h3>
+              <button id="closeOverlayAdjust" class="btn-close" aria-label="关闭"><img src="./svg/false.svg" alt="" width="18" height="18" /></button>
+            </div>
+            <div class="dialog-body">
+              <div class="overlay-adjust-fields">
+                <label class="field">
+                  <span class="field-label">西(经度)</span>
+                  <input id="overlayWest" type="number" step="0.000001" />
+                </label>
+                <label class="field">
+                  <span class="field-label">南(纬度)</span>
+                  <input id="overlaySouth" type="number" step="0.000001" />
+                </label>
+                <label class="field">
+                  <span class="field-label">东(经度)</span>
+                  <input id="overlayEast" type="number" step="0.000001" />
+                </label>
+                <label class="field">
+                  <span class="field-label">北(纬度)</span>
+                  <input id="overlayNorth" type="number" step="0.000001" />
+                </label>
+                <label class="field">
+                  <span class="field-label">步长</span>
+                  <input id="overlayStep" type="number" step="0.000001" value="0.0001" />
+                </label>
+              </div>
+              <div class="overlay-adjust-grid">
+                <button id="overlayMoveUp" type="button" class="btn btn-light btn-sm">上移</button>
+                <button id="overlayScaleUp" type="button" class="btn btn-light btn-sm">放大</button>
+                <button id="overlayMoveLeft" type="button" class="btn btn-light btn-sm">左移</button>
+                <button id="overlayMoveRight" type="button" class="btn btn-light btn-sm">右移</button>
+                <button id="overlayMoveDown" type="button" class="btn btn-light btn-sm">下移</button>
+                <button id="overlayScaleDown" type="button" class="btn btn-light btn-sm">缩小</button>
+              </div>
+            </div>
+            <div class="dialog-actions">
+              <button id="resetOverlayAdjust" type="button" class="btn btn-light">恢复默认</button>
+              <button id="saveOverlayAdjust" type="button" class="btn btn-primary">保存并同步</button>
+            </div>
           </div>
         </div>
 
@@ -291,6 +342,13 @@
                     <span class="settings-item-desc">开启：单击打开详情；关闭：双击打开详情</span>
                   </div>
                   <span id="markerOpenModeState" class="settings-switch">开</span>
+                </div>
+                <div class="settings-item" id="toggleOverlayVisible">
+                  <div class="settings-item-info">
+                    <span class="settings-item-title">校园底图可视</span>
+                    <span class="settings-item-desc">开启：显示叠加底图；关闭：隐藏叠加底图</span>
+                  </div>
+                  <span id="overlayVisibleState" class="settings-switch">开</span>
                 </div>
                 <!-- 未来可以增加更多设置项 -->
               </div>

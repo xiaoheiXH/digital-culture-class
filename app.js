@@ -27,6 +27,22 @@
   const commentNickname = document.getElementById("commentNickname");
   const submitComment = document.getElementById("submitComment");
   const geoBtn = document.getElementById("geoBtn");
+  const overlayAdjustBtn = document.getElementById("overlayAdjustBtn");
+  const overlayAdjustModal = document.getElementById("overlayAdjustModal");
+  const closeOverlayAdjust = document.getElementById("closeOverlayAdjust");
+  const overlayWest = document.getElementById("overlayWest");
+  const overlaySouth = document.getElementById("overlaySouth");
+  const overlayEast = document.getElementById("overlayEast");
+  const overlayNorth = document.getElementById("overlayNorth");
+  const overlayStep = document.getElementById("overlayStep");
+  const overlayMoveUp = document.getElementById("overlayMoveUp");
+  const overlayMoveDown = document.getElementById("overlayMoveDown");
+  const overlayMoveLeft = document.getElementById("overlayMoveLeft");
+  const overlayMoveRight = document.getElementById("overlayMoveRight");
+  const overlayScaleUp = document.getElementById("overlayScaleUp");
+  const overlayScaleDown = document.getElementById("overlayScaleDown");
+  const resetOverlayAdjust = document.getElementById("resetOverlayAdjust");
+  const saveOverlayAdjust = document.getElementById("saveOverlayAdjust");
   const searchInput = document.getElementById("searchInput");
   const searchResults = document.getElementById("searchResults");
   const loginOverlay = document.getElementById("loginOverlay");
@@ -45,6 +61,8 @@
   const perfModeState = document.getElementById("perfModeState");
   const toggleMarkerOpenMode = document.getElementById("toggleMarkerOpenMode");
   const markerOpenModeState = document.getElementById("markerOpenModeState");
+  const toggleOverlayVisible = document.getElementById("toggleOverlayVisible");
+  const overlayVisibleState = document.getElementById("overlayVisibleState");
   const activityDateLabel = document.getElementById("activityDateLabel");
   const activityDayRow = document.getElementById("activityDayRow");
   const activityList = document.getElementById("activityList");
@@ -112,6 +130,17 @@
   const PERF_MODE_KEY = "campus_map_perf_mode";
   const MARKER_OPEN_MODE_KEY = "campus_map_marker_open_mode";
   const EVENTS_KEY = "campus_map_events_v1";
+  const OVERLAY_CONFIG_KEY = "campus_map_overlay_config_v1";
+  const OVERLAY_VISIBLE_KEY = "campus_map_overlay_visible_v1";
+
+  const DEFAULT_OVERLAY_CONFIG = {
+    url: "./svg/mapfrits.png",
+    west: 119.268,
+    south: 26.068,
+    east: 119.278,
+    north: 26.078,
+    opacity: 0.95,
+  };
 
   if (
     !mapContent ||
@@ -142,6 +171,22 @@
     !commentNickname ||
     !submitComment ||
     !geoBtn ||
+    !overlayAdjustBtn ||
+    !overlayAdjustModal ||
+    !closeOverlayAdjust ||
+    !overlayWest ||
+    !overlaySouth ||
+    !overlayEast ||
+    !overlayNorth ||
+    !overlayStep ||
+    !overlayMoveUp ||
+    !overlayMoveDown ||
+    !overlayMoveLeft ||
+    !overlayMoveRight ||
+    !overlayScaleUp ||
+    !overlayScaleDown ||
+    !resetOverlayAdjust ||
+    !saveOverlayAdjust ||
     !searchInput ||
     !searchResults ||
     !loginOverlay ||
@@ -160,6 +205,8 @@
     !perfModeState ||
     !toggleMarkerOpenMode ||
     !markerOpenModeState ||
+    !toggleOverlayVisible ||
+    !overlayVisibleState ||
     !activityDateLabel ||
     !activityDayRow ||
     !activityList ||
@@ -237,12 +284,55 @@
   let toastTimer = null;
   let perfModeEnabled = localStorage.getItem(PERF_MODE_KEY) === "1";
   let markerOpenMode = localStorage.getItem(MARKER_OPEN_MODE_KEY) || "single";
+  let overlayVisible = localStorage.getItem(OVERLAY_VISIBLE_KEY) !== "0";
   let lastUserLngLat = null;
   let events = [];
   let selectedEventId = null;
   let selectedActivityDate = "";
   let selectedActivityMonth = "";
   let eventImageDataUrl = "";
+  let campusImageLayer = null;
+
+  const sanitizeOverlayConfig = (raw) => {
+    if (!raw || typeof raw !== "object") return { ...DEFAULT_OVERLAY_CONFIG };
+    const url = typeof raw.url === "string" && raw.url.trim() ? raw.url.trim() : DEFAULT_OVERLAY_CONFIG.url;
+    const west = Number(raw.west);
+    const south = Number(raw.south);
+    const east = Number(raw.east);
+    const north = Number(raw.north);
+    const opacity = Number(raw.opacity);
+
+    const cfg = {
+      url,
+      west: Number.isFinite(west) ? west : DEFAULT_OVERLAY_CONFIG.west,
+      south: Number.isFinite(south) ? south : DEFAULT_OVERLAY_CONFIG.south,
+      east: Number.isFinite(east) ? east : DEFAULT_OVERLAY_CONFIG.east,
+      north: Number.isFinite(north) ? north : DEFAULT_OVERLAY_CONFIG.north,
+      opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_OVERLAY_CONFIG.opacity,
+    };
+
+    if (cfg.east <= cfg.west) cfg.east = cfg.west + 0.0001;
+    if (cfg.north <= cfg.south) cfg.north = cfg.south + 0.0001;
+    return cfg;
+  };
+
+  const loadOverlayConfigLocal = () => {
+    try {
+      const raw = localStorage.getItem(OVERLAY_CONFIG_KEY);
+      if (!raw) return { ...DEFAULT_OVERLAY_CONFIG };
+      return sanitizeOverlayConfig(JSON.parse(raw));
+    } catch {
+      return { ...DEFAULT_OVERLAY_CONFIG };
+    }
+  };
+
+  const saveOverlayConfigLocal = (cfg) => {
+    try {
+      localStorage.setItem(OVERLAY_CONFIG_KEY, JSON.stringify(sanitizeOverlayConfig(cfg)));
+    } catch {}
+  };
+
+  let overlayConfig = loadOverlayConfigLocal();
 
   const showToast = (message, type = "info", duration = 2200) => {
     if (!toast) return;
@@ -266,6 +356,156 @@
     markerOpenModeState.textContent = on ? "开" : "关";
     markerOpenModeState.classList.toggle("is-on", on);
   };
+
+  const updateOverlayVisibleUI = () => {
+    overlayVisibleState.textContent = overlayVisible ? "开" : "关";
+    overlayVisibleState.classList.toggle("is-on", overlayVisible);
+  };
+
+  const setOverlayAdjustInputs = (cfg) => {
+    const c = sanitizeOverlayConfig(cfg);
+    overlayWest.value = String(c.west);
+    overlaySouth.value = String(c.south);
+    overlayEast.value = String(c.east);
+    overlayNorth.value = String(c.north);
+  };
+
+  const readOverlayAdjustInputs = () => {
+    return sanitizeOverlayConfig({
+      url: DEFAULT_OVERLAY_CONFIG.url,
+      west: Number(overlayWest.value),
+      south: Number(overlaySouth.value),
+      east: Number(overlayEast.value),
+      north: Number(overlayNorth.value),
+      opacity: overlayConfig?.opacity ?? DEFAULT_OVERLAY_CONFIG.opacity,
+    });
+  };
+
+  const readOverlayStep = () => {
+    const v = Number(overlayStep.value);
+    if (!Number.isFinite(v) || v <= 0) return 0.0001;
+    return v;
+  };
+
+  const canLoadCampusOverlay = () => location.protocol === "http:" || location.protocol === "https:";
+
+  const removeCampusOverlay = () => {
+    if (!campusImageLayer) return;
+    try {
+      if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(null);
+      else if (map && typeof map.remove === "function") map.remove(campusImageLayer);
+    } catch {}
+    campusImageLayer = null;
+  };
+
+  const applyCampusOverlay = (cfg) => {
+    if (!map) return;
+    if (!canLoadCampusOverlay()) return;
+    if (!overlayVisible) {
+      removeCampusOverlay();
+      return;
+    }
+    const c = sanitizeOverlayConfig(cfg);
+    removeCampusOverlay();
+    campusImageLayer = new AMap.ImageLayer({
+      url: new URL(c.url, window.location.href).toString(),
+      bounds: new AMap.Bounds([c.west, c.south], [c.east, c.north]),
+      zooms: [3, 20],
+      opacity: c.opacity,
+      zIndex: 5,
+      visible: true,
+    });
+    if (typeof campusImageLayer.setMap === "function") campusImageLayer.setMap(map);
+    else map.add(campusImageLayer);
+  };
+
+  const openOverlayAdjustModal = () => {
+    if (currentUser?.role !== "admin") return;
+    setOverlayAdjustInputs(overlayConfig);
+    overlayAdjustModal.classList.remove("is-hidden");
+    overlayAdjustModal.setAttribute("aria-hidden", "false");
+  };
+
+  const closeOverlayAdjustModal = () => {
+    overlayAdjustModal.classList.add("is-hidden");
+    overlayAdjustModal.setAttribute("aria-hidden", "true");
+  };
+
+  const nudgeOverlay = (dx, dy) => {
+    const step = readOverlayStep();
+    const c = readOverlayAdjustInputs();
+    const next = {
+      ...c,
+      west: c.west + dx * step,
+      east: c.east + dx * step,
+      south: c.south + dy * step,
+      north: c.north + dy * step,
+    };
+    setOverlayAdjustInputs(next);
+    applyCampusOverlay(next);
+  };
+
+  const scaleOverlay = (delta) => {
+    const step = readOverlayStep();
+    const c = readOverlayAdjustInputs();
+    const cx = (c.west + c.east) / 2;
+    const cy = (c.south + c.north) / 2;
+    const w = c.east - c.west;
+    const h = c.north - c.south;
+    const nextW = Math.max(step, w * (1 + delta));
+    const nextH = Math.max(step, h * (1 + delta));
+    const next = {
+      ...c,
+      west: cx - nextW / 2,
+      east: cx + nextW / 2,
+      south: cy - nextH / 2,
+      north: cy + nextH / 2,
+    };
+    setOverlayAdjustInputs(next);
+    applyCampusOverlay(next);
+  };
+
+  async function fetchOverlayConfigOnline() {
+    try {
+      const res = await fetch("/api/mapConfig");
+      if (!res.ok) return;
+      const remote = await res.json();
+      if (remote && typeof remote === "object") {
+        overlayConfig = sanitizeOverlayConfig(remote);
+        saveOverlayConfigLocal(overlayConfig);
+        if (overlayVisible) applyCampusOverlay(overlayConfig);
+      }
+    } catch {}
+  }
+
+  async function saveOverlayConfigOnline(cfg, options = {}) {
+    try {
+      const res = await fetch("/api/mapConfig", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+      });
+      if (!res.ok) {
+        let message = `云端未响应（${res.status}）`;
+        try {
+          const ct = res.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const err = await res.json();
+            message = err?.error || message;
+          } else {
+            const t = await res.text();
+            if (t) message = t;
+          }
+        } catch {}
+        throw new Error(message);
+      }
+      if (options.notice) showToast("✅ 底图参数已同步到云端", "success");
+      return true;
+    } catch (e) {
+      if (options.notice) showToast("❌ 底图同步失败：" + (e?.message || "未知错误"), "error", 3000);
+      return false;
+    }
+  }
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const toDateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -1114,6 +1354,7 @@
   openSettings.addEventListener("click", () => {
     updatePerfModeUI();
     updateMarkerOpenModeUI();
+    updateOverlayVisibleUI();
     settingsModal.classList.remove("is-hidden");
     settingsModal.setAttribute("aria-hidden", "false");
   });
@@ -1147,6 +1388,18 @@
     renderPoints(searchInput.value.trim());
   });
 
+  toggleOverlayVisible.addEventListener("click", () => {
+    overlayVisible = !overlayVisible;
+    localStorage.setItem(OVERLAY_VISIBLE_KEY, overlayVisible ? "1" : "0");
+    updateOverlayVisibleUI();
+    if (overlayVisible) {
+      if (canLoadCampusOverlay()) applyCampusOverlay(overlayConfig);
+      else showToast("本地 file:// 打开会拦截底图图片（CORS）。请用本地服务器或线上链接打开。", "error", 3500);
+    } else {
+      removeCampusOverlay();
+    }
+  });
+
   // 手动同步
   syncCloud.addEventListener("click", () => fetchPointsOnline(false));
 
@@ -1160,6 +1413,7 @@
         'guest': '匿名访客'
       }[currentUser.role] || '未知';
       meRole.textContent = `角色：${roleText}`;
+      overlayAdjustBtn.classList.toggle("is-hidden", currentUser.role !== "admin");
       
       // 控制退出/登录按钮显示
       if (currentUser.role === 'guest') {
@@ -1176,6 +1430,30 @@
   skipLogin.addEventListener("click", handleSkipLogin);
   logoutBtn.addEventListener("click", handleLogout);
   loginBtnMe.addEventListener("click", goToLogin);
+  overlayAdjustBtn.addEventListener("click", openOverlayAdjustModal);
+  closeOverlayAdjust.addEventListener("click", closeOverlayAdjustModal);
+  overlayAdjustModal.addEventListener("click", (e) => {
+    if (e.target === overlayAdjustModal) closeOverlayAdjustModal();
+  });
+  overlayMoveUp.addEventListener("click", () => nudgeOverlay(0, 1));
+  overlayMoveDown.addEventListener("click", () => nudgeOverlay(0, -1));
+  overlayMoveLeft.addEventListener("click", () => nudgeOverlay(-1, 0));
+  overlayMoveRight.addEventListener("click", () => nudgeOverlay(1, 0));
+  overlayScaleUp.addEventListener("click", () => scaleOverlay(0.02));
+  overlayScaleDown.addEventListener("click", () => scaleOverlay(-0.02));
+  resetOverlayAdjust.addEventListener("click", () => {
+    setOverlayAdjustInputs(DEFAULT_OVERLAY_CONFIG);
+    applyCampusOverlay(DEFAULT_OVERLAY_CONFIG);
+  });
+  saveOverlayAdjust.addEventListener("click", async () => {
+    if (currentUser?.role !== "admin") return;
+    const cfg = readOverlayAdjustInputs();
+    overlayConfig = cfg;
+    saveOverlayConfigLocal(overlayConfig);
+    applyCampusOverlay(overlayConfig);
+    await saveOverlayConfigOnline(overlayConfig, { notice: true });
+    closeOverlayAdjustModal();
+  });
 
   // 初始化应用
   const initApp = () => {
@@ -1190,6 +1468,7 @@
     
     syncCurrentUser(); // 确保加载最新本地数据库中的信息
     updateMePage();
+    updateOverlayVisibleUI();
     loginOverlay.classList.add("is-hidden");
     events = loadEventsLocal();
     ensureActivityDate();
@@ -1217,6 +1496,7 @@
       window.onload = initMap;
     }
     fetchPointsOnline(); // [新增] 初始化时从云端同步数据
+    fetchOverlayConfigOnline();
   };
 
   const uuid = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
@@ -1505,28 +1785,10 @@
      * 1. 叠加校园建筑描绘图 (GroundImage/ImageLayer)
      * 将您的手绘图或建筑描绘图放置在 ./assets/campus-map.png (示例路径)
      */
-    const canLoadCampusOverlay = location.protocol === "http:" || location.protocol === "https:";
-    if (canLoadCampusOverlay) {
-      const campusImageLayer = new AMap.ImageLayer({
-        url: new URL("./svg/mapfrits.png", window.location.href).toString(),
-        bounds: new AMap.Bounds(
-          [119.268000, 26.068000], // 西南角
-          [119.278000, 26.078000] // 东北角
-        ),
-        zooms: [3, 20],
-        opacity: 0.95,
-        zIndex: 5,
-        visible: true
-      });
-      if (typeof campusImageLayer.setMap === "function") {
-        campusImageLayer.setMap(map);
-      } else {
-        map.add(campusImageLayer);
-      }
+    if (canLoadCampusOverlay()) {
+      if (overlayVisible) applyCampusOverlay(overlayConfig);
     } else {
-      if (typeof showToast === "function") {
-        showToast("本地 file:// 打开会拦截底图图片（CORS）。请用本地服务器或线上链接打开。", "error", 3500);
-      }
+      showToast("本地 file:// 打开会拦截底图图片（CORS）。请用本地服务器或线上链接打开。", "error", 3500);
     }
 
     /**
