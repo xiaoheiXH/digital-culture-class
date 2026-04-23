@@ -482,6 +482,58 @@
 
   const isCanvasOverlayMode = (cfg) => Math.abs(Number(cfg?.rotationDeg || 0)) > 1e-6;
 
+  const computeAffine = (s0, s1, s2, d0, d1, d2) => {
+    const x0 = s0.x, y0 = s0.y;
+    const x1 = s1.x, y1 = s1.y;
+    const x2 = s2.x, y2 = s2.y;
+    const X0 = d0.x, Y0 = d0.y;
+    const X1 = d1.x, Y1 = d1.y;
+    const X2 = d2.x, Y2 = d2.y;
+
+    const den = x0 * (y1 - y2) + x1 * (y2 - y0) + x2 * (y0 - y1);
+    if (!Number.isFinite(den) || Math.abs(den) < 1e-12) return null;
+
+    const a = (X0 * (y1 - y2) + X1 * (y2 - y0) + X2 * (y0 - y1)) / den;
+    const c = (X0 * (x2 - x1) + X1 * (x0 - x2) + X2 * (x1 - x0)) / den;
+    const e = (X0 * (x1 * y2 - x2 * y1) + X1 * (x2 * y0 - x0 * y2) + X2 * (x0 * y1 - x1 * y0)) / den;
+
+    const b = (Y0 * (y1 - y2) + Y1 * (y2 - y0) + Y2 * (y0 - y1)) / den;
+    const d = (Y0 * (x2 - x1) + Y1 * (x0 - x2) + Y2 * (x1 - x0)) / den;
+    const f = (Y0 * (x1 * y2 - x2 * y1) + Y1 * (x2 * y0 - x0 * y2) + Y2 * (x0 * y1 - x1 * y0)) / den;
+
+    return { a, b, c, d, e, f };
+  };
+
+  const drawImageTriangle = (ctx, img, dst0, dst1, dst2, src0, src1, src2, opacity) => {
+    const m = computeAffine(src0, src1, src2, dst0, dst1, dst2);
+    if (!m) return;
+    const dpr = overlayCanvasDpr || 1;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.beginPath();
+    ctx.moveTo(dst0.x, dst0.y);
+    ctx.lineTo(dst1.x, dst1.y);
+    ctx.lineTo(dst2.x, dst2.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.setTransform(dpr * m.a, dpr * m.b, dpr * m.c, dpr * m.d, dpr * m.e, dpr * m.f);
+    ctx.globalAlpha = opacity;
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  };
+
+  const rotateLngLat = (p, center, deg) => {
+    const rad = (deg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = p.lng - center.lng;
+    const dy = p.lat - center.lat;
+    return {
+      lng: center.lng + dx * cos - dy * sin,
+      lat: center.lat + dx * sin + dy * cos,
+    };
+  };
+
   const renderCampusOverlayCanvas = (cfg) => {
     if (!map || !campusOverlayCanvasCtx || !campusOverlayCanvas) return;
     const c = sanitizeOverlayConfig(cfg);
@@ -491,28 +543,40 @@
     ctx.clearRect(0, 0, size.width, size.height);
     if (!campusOverlayImage) return;
 
-    const sw = map.lngLatToContainer(new AMap.LngLat(c.west, c.south));
-    const ne = map.lngLatToContainer(new AMap.LngLat(c.east, c.north));
-    if (!sw || !ne) return;
-
-    const left = Math.min(sw.x, ne.x);
-    const top = Math.min(sw.y, ne.y);
-    const width = Math.abs(ne.x - sw.x);
-    const height = Math.abs(ne.y - sw.y);
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return;
-
     const snap = (v) => Math.round(v * overlayCanvasDpr) / overlayCanvasDpr;
-    const cx = snap(left + width / 2);
-    const cy = snap(top + height / 2);
-    const drawW = snap(width);
-    const drawH = snap(height);
-    const rad = (c.rotationDeg * Math.PI) / 180;
-    ctx.save();
-    ctx.globalAlpha = c.opacity;
-    ctx.translate(cx, cy);
-    ctx.rotate(rad);
-    ctx.drawImage(campusOverlayImage, -drawW / 2, -drawH / 2, drawW, drawH);
-    ctx.restore();
+    const center = { lng: (c.west + c.east) / 2, lat: (c.south + c.north) / 2 };
+    const nw0 = { lng: c.west, lat: c.north };
+    const ne0 = { lng: c.east, lat: c.north };
+    const se0 = { lng: c.east, lat: c.south };
+    const sw0 = { lng: c.west, lat: c.south };
+    const rot = Number(c.rotationDeg) || 0;
+    const nw = rot ? rotateLngLat(nw0, center, rot) : nw0;
+    const ne = rot ? rotateLngLat(ne0, center, rot) : ne0;
+    const se = rot ? rotateLngLat(se0, center, rot) : se0;
+    const sw = rot ? rotateLngLat(sw0, center, rot) : sw0;
+
+    const p0 = map.lngLatToContainer(new AMap.LngLat(nw.lng, nw.lat));
+    const p1 = map.lngLatToContainer(new AMap.LngLat(ne.lng, ne.lat));
+    const p2 = map.lngLatToContainer(new AMap.LngLat(se.lng, se.lat));
+    const p3 = map.lngLatToContainer(new AMap.LngLat(sw.lng, sw.lat));
+    if (!p0 || !p1 || !p2 || !p3) return;
+
+    const d0 = { x: snap(p0.x), y: snap(p0.y) };
+    const d1 = { x: snap(p1.x), y: snap(p1.y) };
+    const d2 = { x: snap(p2.x), y: snap(p2.y) };
+    const d3 = { x: snap(p3.x), y: snap(p3.y) };
+
+    const iw = campusOverlayImage.naturalWidth || campusOverlayImage.width;
+    const ih = campusOverlayImage.naturalHeight || campusOverlayImage.height;
+    if (!iw || !ih) return;
+
+    const s0 = { x: 0, y: 0 };
+    const s1 = { x: iw, y: 0 };
+    const s2 = { x: iw, y: ih };
+    const s3 = { x: 0, y: ih };
+
+    drawImageTriangle(ctx, campusOverlayImage, d0, d1, d2, s0, s1, s2, c.opacity);
+    drawImageTriangle(ctx, campusOverlayImage, d0, d2, d3, s0, s2, s3, c.opacity);
   };
 
   const teardownCampusOverlayCanvas = () => {
